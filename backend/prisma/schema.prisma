@@ -1,0 +1,577 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============= USER & AUTH =============
+model User {
+  id                String    @id @default(uuid())
+  email             String    @unique
+  password          String
+  firstName         String
+  lastName          String
+  company           String?
+  phone             String?
+  timezone          String?   @default("America/New_York")
+  notificationPrefs String?   @default("{}")
+  brandingSettings  String?   @default("{}")
+  role              UserRole  @default(USER)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  campaigns       Campaign[]
+  contacts        Contact[]
+  templates       Template[]
+  automations     Automation[]
+  landingPages    LandingPage[]
+  forms           Form[]
+  reviews         Review[]
+  integrations    Integration[]
+  aiGenerations   AIGeneration[]
+  segments        Segment[]
+  tags            Tag[]
+  customFields    CustomField[]
+  images          ImageLibrary[]
+  abTests         ABTest[]
+}
+
+enum UserRole {
+  ADMIN
+  USER
+}
+
+// ============= CAMPAIGNS =============
+model Campaign {
+  id              String          @id @default(uuid())
+  userId          String
+  user            User            @relation(fields: [userId], references: [id])
+  name            String
+  description     String?
+  type            CampaignType
+  status          CampaignStatus  @default(DRAFT)
+  subject         String?
+  content         String?
+  htmlContent     String?
+  scheduledAt     DateTime?
+  sentAt          DateTime?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  templateId      String?
+  template        Template?       @relation(fields: [templateId], references: [id])
+  segmentId       String?
+  segment         Segment?        @relation(fields: [segmentId], references: [id])
+
+  recipients      CampaignRecipient[]
+  analytics       CampaignAnalytics[]
+  abTests         ABTest[]
+}
+
+enum CampaignType {
+  EMAIL
+  SMS
+  SOCIAL_MEDIA
+  MULTI_CHANNEL
+}
+
+enum CampaignStatus {
+  DRAFT
+  SCHEDULED
+  SENDING
+  SENT
+  PAUSED
+  CANCELLED
+}
+
+model CampaignRecipient {
+  id          String    @id @default(uuid())
+  campaignId  String
+  campaign    Campaign  @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  contactId   String
+  contact     Contact   @relation(fields: [contactId], references: [id])
+  status      RecipientStatus @default(PENDING)
+  sentAt      DateTime?
+  openedAt    DateTime?
+  clickedAt   DateTime?
+  bouncedAt   DateTime?
+  unsubscribedAt DateTime?
+  createdAt   DateTime  @default(now())
+}
+
+enum RecipientStatus {
+  PENDING
+  SENT
+  DELIVERED
+  OPENED
+  CLICKED
+  BOUNCED
+  UNSUBSCRIBED
+  FAILED
+}
+
+model CampaignAnalytics {
+  id            String    @id @default(uuid())
+  campaignId    String
+  campaign      Campaign  @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  totalSent     Int       @default(0)
+  delivered     Int       @default(0)
+  opened        Int       @default(0)
+  clicked       Int       @default(0)
+  bounced       Int       @default(0)
+  unsubscribed  Int       @default(0)
+  conversions   Int       @default(0)
+  revenue       Float     @default(0)
+  recordedAt    DateTime  @default(now())
+}
+
+// ============= TEMPLATES =============
+model Template {
+  id          String        @id @default(uuid())
+  userId      String
+  user        User          @relation(fields: [userId], references: [id])
+  name        String
+  description String?
+  type        TemplateType
+  subject     String?
+  content     String
+  htmlContent String?
+  category    String?
+  isPublic    Boolean       @default(false)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  campaigns   Campaign[]
+  automationSteps AutomationStep[]
+}
+
+enum TemplateType {
+  EMAIL
+  SMS
+  SOCIAL_POST
+  LANDING_PAGE
+}
+
+// ============= CONTACTS =============
+model Contact {
+  id            String    @id @default(uuid())
+  userId        String
+  user          User      @relation(fields: [userId], references: [id])
+  email         String
+  phone         String?
+  firstName     String?
+  lastName      String?
+  company       String?
+  status        ContactStatus @default(ACTIVE)
+  source        String?
+  optedOutAt    DateTime?
+  birthday      DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  tags          ContactTag[]
+  customFieldValues CustomFieldValue[]
+  segments      ContactSegment[]
+  campaignRecipients CampaignRecipient[]
+  automationEnrollments AutomationEnrollment[]
+  formSubmissions FormSubmission[]
+  reviews       Review[]
+
+  @@unique([userId, email])
+}
+
+enum ContactStatus {
+  ACTIVE
+  UNSUBSCRIBED
+  BOUNCED
+  INACTIVE
+}
+
+model Tag {
+  id          String      @id @default(uuid())
+  userId      String
+  user        User        @relation(fields: [userId], references: [id])
+  name        String
+  color       String      @default("#3B82F6")
+  createdAt   DateTime    @default(now())
+
+  contacts    ContactTag[]
+
+  @@unique([userId, name])
+}
+
+model ContactTag {
+  id        String    @id @default(uuid())
+  contactId String
+  contact   Contact   @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  tagId     String
+  tag       Tag       @relation(fields: [tagId], references: [id], onDelete: Cascade)
+  createdAt DateTime  @default(now())
+
+  @@unique([contactId, tagId])
+}
+
+model CustomField {
+  id          String    @id @default(uuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id])
+  name        String
+  fieldType   FieldType
+  options     String?   // JSON array for dropdown options
+  required    Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+
+  values      CustomFieldValue[]
+
+  @@unique([userId, name])
+}
+
+enum FieldType {
+  TEXT
+  NUMBER
+  DATE
+  DROPDOWN
+  CHECKBOX
+  URL
+}
+
+model CustomFieldValue {
+  id            String      @id @default(uuid())
+  contactId     String
+  contact       Contact     @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  customFieldId String
+  customField   CustomField @relation(fields: [customFieldId], references: [id], onDelete: Cascade)
+  value         String
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  @@unique([contactId, customFieldId])
+}
+
+// ============= SEGMENTATION =============
+model Segment {
+  id          String    @id @default(uuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id])
+  name        String
+  description String?
+  rules       String    // JSON rules for dynamic segmentation
+  isAISuggested Boolean @default(false)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  contacts    ContactSegment[]
+  campaigns   Campaign[]
+  automations Automation[]
+}
+
+model ContactSegment {
+  id        String    @id @default(uuid())
+  contactId String
+  contact   Contact   @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  segmentId String
+  segment   Segment   @relation(fields: [segmentId], references: [id], onDelete: Cascade)
+  createdAt DateTime  @default(now())
+
+  @@unique([contactId, segmentId])
+}
+
+// ============= AUTOMATION =============
+model Automation {
+  id          String            @id @default(uuid())
+  userId      String
+  user        User              @relation(fields: [userId], references: [id])
+  name        String
+  description String?
+  type        AutomationType
+  status      AutomationStatus  @default(INACTIVE)
+  trigger     String            // JSON trigger configuration
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  segmentId   String?
+  segment     Segment?          @relation(fields: [segmentId], references: [id])
+
+  steps       AutomationStep[]
+  enrollments AutomationEnrollment[]
+}
+
+enum AutomationType {
+  DRIP
+  TRIGGER
+  BIRTHDAY
+  REENGAGEMENT
+  WELCOME
+}
+
+enum AutomationStatus {
+  ACTIVE
+  INACTIVE
+  PAUSED
+}
+
+model AutomationStep {
+  id            String      @id @default(uuid())
+  automationId  String
+  automation    Automation  @relation(fields: [automationId], references: [id], onDelete: Cascade)
+  order         Int
+  type          StepType
+  delayMinutes  Int         @default(0)
+  templateId    String?
+  template      Template?   @relation(fields: [templateId], references: [id])
+  config        String?     // JSON configuration
+  createdAt     DateTime    @default(now())
+
+  enrollmentSteps EnrollmentStep[]
+}
+
+enum StepType {
+  EMAIL
+  SMS
+  WAIT
+  CONDITION
+  TAG_ADD
+  TAG_REMOVE
+  WEBHOOK
+}
+
+model AutomationEnrollment {
+  id            String      @id @default(uuid())
+  automationId  String
+  automation    Automation  @relation(fields: [automationId], references: [id], onDelete: Cascade)
+  contactId     String
+  contact       Contact     @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  status        EnrollmentStatus @default(ACTIVE)
+  currentStep   Int         @default(0)
+  enrolledAt    DateTime    @default(now())
+  completedAt   DateTime?
+
+  steps         EnrollmentStep[]
+}
+
+enum EnrollmentStatus {
+  ACTIVE
+  COMPLETED
+  PAUSED
+  CANCELLED
+}
+
+model EnrollmentStep {
+  id            String              @id @default(uuid())
+  enrollmentId  String
+  enrollment    AutomationEnrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  stepId        String
+  step          AutomationStep      @relation(fields: [stepId], references: [id], onDelete: Cascade)
+  status        StepStatus          @default(PENDING)
+  scheduledAt   DateTime?
+  executedAt    DateTime?
+  createdAt     DateTime            @default(now())
+}
+
+enum StepStatus {
+  PENDING
+  SCHEDULED
+  EXECUTED
+  SKIPPED
+  FAILED
+}
+
+// ============= CONTENT =============
+model LandingPage {
+  id          String    @id @default(uuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id])
+  name        String
+  slug        String    @unique
+  htmlContent String
+  cssContent  String?
+  jsContent   String?
+  isPublished Boolean   @default(false)
+  views       Int       @default(0)
+  conversions Int       @default(0)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  forms       Form[]
+}
+
+model Form {
+  id            String    @id @default(uuid())
+  userId        String
+  user          User      @relation(fields: [userId], references: [id])
+  name          String
+  description   String?
+  fields        String    // JSON array of form fields
+  submitAction  String?   // JSON action configuration
+  landingPageId String?
+  landingPage   LandingPage? @relation(fields: [landingPageId], references: [id])
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  submissions   FormSubmission[]
+}
+
+model FormSubmission {
+  id          String    @id @default(uuid())
+  formId      String
+  form        Form      @relation(fields: [formId], references: [id], onDelete: Cascade)
+  contactId   String?
+  contact     Contact?  @relation(fields: [contactId], references: [id])
+  data        String    // JSON submission data
+  ipAddress   String?
+  userAgent   String?
+  createdAt   DateTime  @default(now())
+}
+
+model ImageLibrary {
+  id          String    @id @default(uuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id])
+  name        String
+  filename    String
+  url         String
+  mimeType    String
+  size        Int
+  isAIGenerated Boolean @default(false)
+  createdAt   DateTime  @default(now())
+}
+
+// ============= ANALYTICS & A/B TESTING =============
+model ABTest {
+  id          String      @id @default(uuid())
+  userId      String
+  user        User        @relation(fields: [userId], references: [id])
+  campaignId  String
+  campaign    Campaign    @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  name        String
+  status      ABTestStatus @default(RUNNING)
+  winnerVariant String?
+  createdAt   DateTime    @default(now())
+  endedAt     DateTime?
+
+  variants    ABTestVariant[]
+}
+
+enum ABTestStatus {
+  RUNNING
+  COMPLETED
+  CANCELLED
+}
+
+model ABTestVariant {
+  id          String    @id @default(uuid())
+  abTestId    String
+  abTest      ABTest    @relation(fields: [abTestId], references: [id], onDelete: Cascade)
+  name        String
+  subject     String?
+  content     String?
+  percentage  Float     @default(50)
+  sent        Int       @default(0)
+  opened      Int       @default(0)
+  clicked     Int       @default(0)
+  conversions Int       @default(0)
+  createdAt   DateTime  @default(now())
+}
+
+// ============= REPUTATION / REVIEWS =============
+model Review {
+  id          String        @id @default(uuid())
+  userId      String
+  user        User          @relation(fields: [userId], references: [id])
+  contactId   String?
+  contact     Contact?      @relation(fields: [contactId], references: [id])
+  platform    ReviewPlatform
+  externalId  String?
+  rating      Int
+  content     String?
+  authorName  String
+  authorEmail String?
+  status      ReviewStatus  @default(PENDING)
+  response    String?
+  respondedAt DateTime?
+  publishedAt DateTime?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+}
+
+enum ReviewPlatform {
+  GOOGLE
+  YELP
+  FACEBOOK
+  TRUSTPILOT
+  CUSTOM
+}
+
+enum ReviewStatus {
+  PENDING
+  RESPONDED
+  IGNORED
+}
+
+// ============= INTEGRATIONS =============
+model Integration {
+  id          String            @id @default(uuid())
+  userId      String
+  user        User              @relation(fields: [userId], references: [id])
+  type        IntegrationType
+  name        String
+  config      String            // Encrypted JSON configuration
+  status      IntegrationStatus @default(ACTIVE)
+  lastSyncAt  DateTime?
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+}
+
+enum IntegrationType {
+  EMAIL_SENDGRID
+  EMAIL_MAILGUN
+  EMAIL_SES
+  SMS_TWILIO
+  SMS_MESSAGEBIRD
+  SOCIAL_FACEBOOK
+  SOCIAL_INSTAGRAM
+  SOCIAL_TWITTER
+  SOCIAL_LINKEDIN
+  ADS_GOOGLE
+  ADS_FACEBOOK
+  REVIEW_GOOGLE
+  REVIEW_YELP
+  CRM_SALESFORCE
+  CRM_HUBSPOT
+  BOOKING_CALENDLY
+  BOOKING_ACUITY
+}
+
+enum IntegrationStatus {
+  ACTIVE
+  INACTIVE
+  ERROR
+}
+
+// ============= AI GENERATIONS =============
+model AIGeneration {
+  id          String          @id @default(uuid())
+  userId      String
+  user        User            @relation(fields: [userId], references: [id])
+  type        AIGenerationType
+  prompt      String
+  result      String
+  metadata    String?         // JSON metadata
+  createdAt   DateTime        @default(now())
+}
+
+enum AIGenerationType {
+  CONTENT
+  IMAGE
+  SUBJECT_LINE
+  SEND_TIME
+  SEGMENTATION
+  CAMPAIGN_IDEA
+  REVIEW_RESPONSE
+  SOCIAL_POST
+  AD_COPY
+  PREDICTION
+}
