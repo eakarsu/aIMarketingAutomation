@@ -5,6 +5,14 @@ BACKEND_PORT="${BACKEND_PORT:-4000}"
 FRONTEND_PORT="${FRONTEND_PORT:-5173}"
 DB_NAME="ai_marketing"
 
+# Colors for terminal output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+CYAN='\033[0;36m'
+NC='\033[0m' # No Color
+
 echo "=========================================="
 echo "  AI Marketing Automation - Startup Script"
 echo "=========================================="
@@ -98,20 +106,26 @@ npx prisma db push || {
   npx prisma db push --force-reset
 }
 
-# Update .env file with current DATABASE_URL
+# Update root .env file with current DATABASE_URL
 echo ""
-echo "==> Updating backend .env file..."
-if [ -f ".env" ]; then
-  if grep -q "^DATABASE_URL=" .env; then
-    sed -i '' "s|^DATABASE_URL=.*|DATABASE_URL=\"${DATABASE_URL}\"|" .env 2>/dev/null || \
-    sed -i "s|^DATABASE_URL=.*|DATABASE_URL=\"${DATABASE_URL}\"|" .env
+echo "==> Updating root .env file..."
+ROOT_ENV="$SCRIPT_DIR/.env"
+if [ -f "$ROOT_ENV" ]; then
+  if grep -q "^DATABASE_URL=" "$ROOT_ENV"; then
+    sed -i '' "s|^DATABASE_URL=.*|DATABASE_URL=\"${DATABASE_URL}\"|" "$ROOT_ENV" 2>/dev/null || \
+    sed -i "s|^DATABASE_URL=.*|DATABASE_URL=\"${DATABASE_URL}\"|" "$ROOT_ENV"
   else
-    echo "DATABASE_URL=\"${DATABASE_URL}\"" >> .env
+    echo "DATABASE_URL=\"${DATABASE_URL}\"" >> "$ROOT_ENV"
   fi
 else
-  echo "DATABASE_URL=\"${DATABASE_URL}\"" > .env
-  echo "JWT_SECRET=\"ai-marketing-secret-change-in-production\"" >> .env
-  echo "PORT=${BACKEND_PORT}" >> .env
+  echo "DATABASE_URL=\"${DATABASE_URL}\"" > "$ROOT_ENV"
+  echo "JWT_SECRET=\"ai-marketing-secret-change-in-production\"" >> "$ROOT_ENV"
+  echo "PORT=${BACKEND_PORT}" >> "$ROOT_ENV"
+  echo "NODE_ENV=development" >> "$ROOT_ENV"
+  echo "" >> "$ROOT_ENV"
+  echo "# OpenRouter AI Configuration" >> "$ROOT_ENV"
+  echo "OPENROUTER_API_KEY=\"your-openrouter-api-key-here\"" >> "$ROOT_ENV"
+  echo "OPENROUTER_MODEL=\"anthropic/claude-haiku-4.5\"" >> "$ROOT_ENV"
 fi
 
 # Check if database has been seeded
@@ -192,19 +206,28 @@ fi
 echo "Frontend started (PID: $FRONTEND_PID)"
 
 echo ""
-echo "=========================================="
+echo -e "${GREEN}=========================================="
 echo "  AI Marketing Automation is running!"
-echo "=========================================="
+echo "==========================================${NC}"
 echo ""
-echo "Access the application at:"
-echo "  Frontend: http://localhost:${FRONTEND_PORT}"
-echo "  Backend API: http://localhost:${BACKEND_PORT}"
+echo -e "${CYAN}Access the application at:${NC}"
+echo -e "  Frontend:    ${GREEN}http://localhost:${FRONTEND_PORT}${NC}"
+echo -e "  Backend API: ${GREEN}http://localhost:${BACKEND_PORT}${NC}"
+echo -e "  Health:      ${GREEN}http://localhost:${BACKEND_PORT}/api/health${NC}"
 echo ""
-echo "Demo credentials:"
-echo "  Email: demo@example.com"
-echo "  Password: demo123"
+echo -e "${CYAN}Demo credentials:${NC}"
+echo -e "  Email:    ${YELLOW}demo@example.com${NC}"
+echo -e "  Password: ${YELLOW}demo123${NC}"
 echo ""
-echo "Press Ctrl+C to stop all services"
+echo -e "${CYAN}AI Features Available:${NC}"
+echo "  - AI Segment Builder      - AI Customer Persona Creator"
+echo "  - AI Journey Optimizer    - AI Influencer Matcher"
+echo "  - AI Attribution Modeler  - AI Hashtag Generator"
+echo "  - AI Budget Allocator     - AI Landing Page Builder"
+echo "  - AI Fatigue Detector     - Plus 8 more AI tools!"
+echo ""
+echo -e "${YELLOW}Hot reload is enabled - your code changes will be detected automatically${NC}"
+echo -e "${YELLOW}Press Ctrl+C to stop all services${NC}"
 echo ""
 
 # Wait for both processes

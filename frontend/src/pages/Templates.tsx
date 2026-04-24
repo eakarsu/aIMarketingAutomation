@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import {
   PlusIcon,
   TrashIcon,
@@ -11,10 +11,12 @@ import {
   FunnelIcon,
   MegaphoneIcon,
   DocumentTextIcon,
-  EyeIcon,
 } from '@heroicons/react/24/outline';
 import { templatesAPI } from '../services/api';
 import toast from 'react-hot-toast';
+import ConfirmDialog from '../components/ConfirmDialog';
+import { CardSkeleton } from '../components/Skeleton';
+import DetailModal from '../components/DetailModal';
 
 const TYPE_CONFIG: Record<string, { icon: any; color: string; bgColor: string; label: string }> = {
   EMAIL: { icon: EnvelopeIcon, color: 'text-blue-600', bgColor: 'bg-blue-100', label: 'Email' },
@@ -23,6 +25,7 @@ const TYPE_CONFIG: Record<string, { icon: any; color: string; bgColor: string; l
 };
 
 export default function Templates() {
+  const navigate = useNavigate();
   const [templates, setTemplates] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [typeFilter, setTypeFilter] = useState('');
@@ -30,17 +33,23 @@ export default function Templates() {
   const [types, setTypes] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
   const [duplicating, setDuplicating] = useState<string | null>(null);
+  const [sortBy] = useState('createdAt');
+  const [sortOrder] = useState<'asc' | 'desc'>('desc');
+  const [selectedItem, setSelectedItem] = useState<any>(null);
+  const [confirmDelete, setConfirmDelete] = useState<{ id: string; name: string } | null>(null);
 
   useEffect(() => {
     fetchTemplates();
     fetchOptions();
-  }, [typeFilter, categoryFilter]);
+  }, [typeFilter, categoryFilter, sortBy, sortOrder]);
 
   const fetchTemplates = async () => {
     try {
       const params: any = {};
       if (typeFilter) params.type = typeFilter;
       if (categoryFilter) params.category = categoryFilter;
+      if (sortBy) params.sortBy = sortBy;
+      if (sortOrder) params.sortOrder = sortOrder;
       const response = await templatesAPI.getAll(params);
       setTemplates(response.data);
     } catch (error) {
@@ -63,11 +72,12 @@ export default function Templates() {
     }
   };
 
-  const handleDelete = async (id: string, name: string) => {
-    if (!confirm(`Are you sure you want to delete "${name}"?`)) return;
+  const handleDelete = async () => {
+    if (!confirmDelete) return;
     try {
-      await templatesAPI.delete(id);
+      await templatesAPI.delete(confirmDelete.id);
       toast.success('Template deleted successfully');
+      setConfirmDelete(null);
       fetchTemplates();
     } catch (error) {
       toast.error('Failed to delete template');
@@ -98,11 +108,7 @@ export default function Templates() {
   }));
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
-      </div>
-    );
+    return <CardSkeleton count={8} />;
   }
 
   return (
@@ -249,7 +255,8 @@ export default function Templates() {
               return (
                 <div
                   key={template.id}
-                  className="group relative border border-gray-200 rounded-xl overflow-hidden hover:shadow-lg hover:border-gray-300 transition-all duration-200"
+                  className="group relative border border-gray-200 rounded-xl overflow-hidden hover:shadow-lg hover:border-gray-300 transition-all duration-200 cursor-pointer"
+                  onClick={() => setSelectedItem(template)}
                 >
                   {/* Preview Header */}
                   <div className="h-24 bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center border-b border-gray-200">
@@ -275,6 +282,7 @@ export default function Templates() {
                         <Link
                           to={`/templates/${template.id}/edit`}
                           className="block"
+                          onClick={(e) => e.stopPropagation()}
                         >
                           <h3 className="text-base font-semibold text-gray-900 hover:text-primary-600 truncate">
                             {template.name}
@@ -298,11 +306,12 @@ export default function Templates() {
                           to={`/templates/${template.id}/edit`}
                           className="p-2 text-gray-400 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors"
                           title="Edit template"
+                          onClick={(e) => e.stopPropagation()}
                         >
                           <PencilIcon className="h-4 w-4" />
                         </Link>
                         <button
-                          onClick={() => handleDuplicate(template.id)}
+                          onClick={(e) => { e.stopPropagation(); handleDuplicate(template.id); }}
                           disabled={duplicating === template.id}
                           className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors disabled:opacity-50"
                           title="Duplicate template"
@@ -312,7 +321,7 @@ export default function Templates() {
                           />
                         </button>
                         <button
-                          onClick={() => handleDelete(template.id, template.name)}
+                          onClick={(e) => { e.stopPropagation(); setConfirmDelete({ id: template.id, name: template.name }); }}
                           className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                           title="Delete template"
                         >
@@ -327,6 +336,55 @@ export default function Templates() {
           </div>
         )}
       </div>
+
+      {/* Confirm Delete Dialog */}
+      <ConfirmDialog
+        isOpen={!!confirmDelete}
+        onClose={() => setConfirmDelete(null)}
+        onConfirm={handleDelete}
+        title="Delete Template"
+        message={`Are you sure you want to delete "${confirmDelete?.name}"? This action cannot be undone.`}
+        confirmText="Delete"
+        variant="danger"
+      />
+
+      {/* Detail Modal */}
+      <DetailModal
+        isOpen={!!selectedItem}
+        onClose={() => setSelectedItem(null)}
+        title={selectedItem?.name || 'Template Details'}
+        onEdit={() => { navigate(`/templates/${selectedItem?.id}/edit`); setSelectedItem(null); }}
+        onDelete={() => { setConfirmDelete({ id: selectedItem?.id, name: selectedItem?.name }); setSelectedItem(null); }}
+      >
+        {selectedItem && (
+          <div className="space-y-4">
+            <div>
+              <dt className="text-sm font-medium text-gray-500">Name</dt>
+              <dd className="mt-1 text-sm text-gray-900">{selectedItem.name}</dd>
+            </div>
+            <div>
+              <dt className="text-sm font-medium text-gray-500">Type</dt>
+              <dd className="mt-1 text-sm text-gray-900">{getTypeConfig(selectedItem.type).label}</dd>
+            </div>
+            <div>
+              <dt className="text-sm font-medium text-gray-500">Category</dt>
+              <dd className="mt-1 text-sm text-gray-900">{selectedItem.category || 'None'}</dd>
+            </div>
+            <div>
+              <dt className="text-sm font-medium text-gray-500">Subject</dt>
+              <dd className="mt-1 text-sm text-gray-900">{selectedItem.subject || 'N/A'}</dd>
+            </div>
+            <div>
+              <dt className="text-sm font-medium text-gray-500">Content Preview</dt>
+              <dd className="mt-1 text-sm text-gray-900 line-clamp-6">{selectedItem.content || selectedItem.description || 'No content'}</dd>
+            </div>
+            <div>
+              <dt className="text-sm font-medium text-gray-500">Used in Campaigns</dt>
+              <dd className="mt-1 text-sm text-gray-900">{selectedItem._count?.campaigns || 0}</dd>
+            </div>
+          </div>
+        )}
+      </DetailModal>
     </div>
   );
 }

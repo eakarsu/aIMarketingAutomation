@@ -9,7 +9,7 @@ router.use(authMiddleware);
 router.get('/', async (req: AuthRequest, res: Response) => {
   try {
     const prisma: PrismaClient = req.app.get('prisma');
-    const { type, category, search } = req.query;
+    const { type, category, search, sortBy, sortOrder } = req.query;
 
     const where: any = {
       OR: [
@@ -28,12 +28,16 @@ router.get('/', async (req: AuthRequest, res: Response) => {
       };
     }
 
+    const allowedSort = ['name', 'type', 'category', 'createdAt'];
+    const oField = allowedSort.includes(sortBy as string) ? (sortBy as string) : 'createdAt';
+    const oDir = sortOrder === 'asc' ? 'asc' : 'desc';
+
     const templates = await prisma.template.findMany({
       where,
       include: {
         _count: { select: { campaigns: true } },
       },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { [oField]: oDir },
     });
 
     res.json(templates);

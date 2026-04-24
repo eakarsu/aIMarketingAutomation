@@ -37,6 +37,29 @@ model User {
   customFields    CustomField[]
   images          ImageLibrary[]
   abTests         ABTest[]
+  aiSegments      AISegment[]
+  aiJourneys      AIJourney[]
+  aiAttributions  AIAttribution[]
+  aiBudgets       AIBudget[]
+  aiFatigues      AIFatigue[]
+  aiPersonas      AIPersona[]
+  aiInfluencers   AIInfluencer[]
+  aiHashtags      AIHashtag[]
+  aiLandingPages  AILandingPageTemplate[]
+  aiEmailCampaigns AIEmailCampaign[]
+  passwordResets   PasswordReset[]
+  emailVerified    Boolean   @default(false)
+  verificationToken String?  @unique
+}
+
+model PasswordReset {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  token     String   @unique
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
 }
 
 enum UserRole {
@@ -574,4 +597,191 @@ enum AIGenerationType {
   SOCIAL_POST
   AD_COPY
   PREDICTION
+  SEGMENT_BUILDER
+  JOURNEY_OPTIMIZER
+  ATTRIBUTION_MODEL
+  BUDGET_ALLOCATOR
+  FATIGUE_DETECTOR
+  PERSONA_CREATOR
+  INFLUENCER_MATCHER
+  HASHTAG_GENERATOR
+  LANDING_PAGE_BUILDER
+  EMAIL_CAMPAIGN_WRITER
+}
+
+// ============= AI SEGMENT BUILDER =============
+model AISegment {
+  id              String    @id @default(uuid())
+  userId          String
+  user            User      @relation(fields: [userId], references: [id])
+  name            String
+  description     String?
+  criteria        String    // JSON criteria
+  contactCount    Int       @default(0)
+  confidence      Float     @default(0)
+  insights        String?   // JSON insights
+  status          String    @default("active")
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+// ============= AI CUSTOMER JOURNEY =============
+model AIJourney {
+  id              String    @id @default(uuid())
+  userId          String
+  user            User      @relation(fields: [userId], references: [id])
+  name            String
+  description     String?
+  stages          String    // JSON stages
+  touchpoints     String?   // JSON touchpoints
+  recommendations String?   // JSON recommendations
+  conversionRate  Float     @default(0)
+  status          String    @default("active")
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+// ============= AI ATTRIBUTION MODEL =============
+model AIAttribution {
+  id              String    @id @default(uuid())
+  userId          String
+  user            User      @relation(fields: [userId], references: [id])
+  name            String
+  modelType       String    // first-touch, last-touch, linear, time-decay, data-driven
+  channels        String    // JSON channels with attribution percentages
+  insights        String?   // JSON insights
+  revenue         Float     @default(0)
+  conversions     Int       @default(0)
+  status          String    @default("active")
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+// ============= AI BUDGET ALLOCATION =============
+model AIBudget {
+  id              String    @id @default(uuid())
+  userId          String
+  user            User      @relation(fields: [userId], references: [id])
+  name            String
+  totalBudget     Float
+  allocations     String    // JSON allocations per channel
+  recommendations String?   // JSON recommendations
+  projectedROI    Float     @default(0)
+  status          String    @default("active")
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+// ============= AI FATIGUE DETECTION =============
+model AIFatigue {
+  id              String    @id @default(uuid())
+  userId          String
+  user            User      @relation(fields: [userId], references: [id])
+  contactId       String?
+  segmentName     String?
+  fatigueScore    Float     @default(0)
+  emailFrequency  Int       @default(0)
+  openRateDecline Float     @default(0)
+  recommendations String?   // JSON recommendations
+  status          String    @default("active")
+  detectedAt      DateTime  @default(now())
+}
+
+// ============= AI CUSTOMER PERSONA =============
+model AIPersona {
+  id              String    @id @default(uuid())
+  userId          String
+  user            User      @relation(fields: [userId], references: [id])
+  name            String
+  avatar          String?
+  demographics    String    // JSON demographics
+  psychographics  String?   // JSON psychographics
+  behaviors       String?   // JSON behaviors
+  painPoints      String?   // JSON pain points
+  goals           String?   // JSON goals
+  preferredChannels String? // JSON channels
+  contentPreferences String? // JSON content preferences
+  status          String    @default("active")
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+// ============= AI INFLUENCER MATCHING =============
+model AIInfluencer {
+  id              String    @id @default(uuid())
+  userId          String
+  user            User      @relation(fields: [userId], references: [id])
+  name            String
+  platform        String
+  niche           String
+  followers       Int       @default(0)
+  engagementRate  Float     @default(0)
+  matchScore      Float     @default(0)
+  estimatedReach  Int       @default(0)
+  estimatedCost   Float     @default(0)
+  contactInfo     String?   // JSON contact info
+  notes           String?
+  status          String    @default("potential")
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+// ============= AI HASHTAG SUGGESTIONS =============
+model AIHashtag {
+  id              String    @id @default(uuid())
+  userId          String
+  user            User      @relation(fields: [userId], references: [id])
+  topic           String
+  platform        String
+  hashtags        String    // JSON array of hashtags
+  popularity      String?   // JSON popularity scores
+  recommendations String?   // JSON recommendations
+  status          String    @default("active")
+  createdAt       DateTime  @default(now())
+}
+
+// ============= AI LANDING PAGE BUILDER =============
+model AILandingPageTemplate {
+  id              String    @id @default(uuid())
+  userId          String
+  user            User      @relation(fields: [userId], references: [id])
+  name            String
+  purpose         String
+  industry        String?
+  headline        String
+  subheadline     String?
+  bodyCopy        String
+  ctaText         String
+  ctaColor        String?
+  layout          String    // JSON layout configuration
+  colorScheme     String?   // JSON colors
+  conversionTips  String?   // JSON tips
+  status          String    @default("draft")
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+// ============= AI EMAIL CAMPAIGN WRITER =============
+model AIEmailCampaign {
+  id              String    @id @default(uuid())
+  userId          String
+  user            User      @relation(fields: [userId], references: [id])
+  name            String
+  campaignType    String    // welcome, promotional, newsletter, re-engagement, announcement, product-launch, event, seasonal
+  subject         String
+  previewText     String?
+  body            String    @db.Text
+  sections        String?   @db.Text  // JSON array of email sections
+  ctaText         String?
+  ctaUrl          String?
+  tone            String?
+  industry        String?
+  audience        String?
+  estimatedOpenRate   Float?
+  estimatedClickRate  Float?
+  abVariants      String?   @db.Text  // JSON array of A/B test subject line variants
+  sendTimeRec     String?   // Recommended send time
+  tips            String?   @db.Text  // JSON array of optimization tips
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 }

@@ -9,7 +9,7 @@ router.use(authMiddleware);
 router.get('/', async (req: AuthRequest, res: Response) => {
   try {
     const prisma: PrismaClient = req.app.get('prisma');
-    const { status, search, tagId, segmentId, page = '1', limit = '50' } = req.query;
+    const { status, search, tagId, segmentId, page = '1', limit = '50', sortBy, sortOrder } = req.query;
 
     const where: any = { userId: req.userId };
     if (status) where.status = status;
@@ -30,6 +30,10 @@ router.get('/', async (req: AuthRequest, res: Response) => {
 
     const skip = (parseInt(page as string) - 1) * parseInt(limit as string);
 
+    const allowedSortFields = ['firstName', 'lastName', 'email', 'company', 'status', 'createdAt'];
+    const orderField = allowedSortFields.includes(sortBy as string) ? (sortBy as string) : 'createdAt';
+    const orderDir = sortOrder === 'asc' ? 'asc' : 'desc';
+
     const [contacts, total] = await Promise.all([
       prisma.contact.findMany({
         where,
@@ -38,7 +42,7 @@ router.get('/', async (req: AuthRequest, res: Response) => {
           segments: { include: { segment: { select: { id: true, name: true } } } },
           customFieldValues: { include: { customField: true } },
         },
-        orderBy: { createdAt: 'desc' },
+        orderBy: { [orderField]: orderDir },
         skip,
         take: parseInt(limit as string),
       }),
@@ -260,6 +264,42 @@ router.post('/bulk-delete', async (req: AuthRequest, res: Response) => {
   } catch (error) {
     console.error('Bulk delete contacts error:', error);
     res.status(500).json({ error: 'Failed to delete contacts' });
+  }
+});
+
+// Bulk update contacts
+router.put('/bulk-update', async (req: AuthRequest, res: Response) => {
+  try {
+    const prisma: PrismaClient = req.app.get('prisma');
+    const { ids, updates } = req.body;
+
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ error: 'No contact IDs provided' });
+    }
+
+    const updateData: any = {};
+    if (updates.status) updateData.status = updates.status as ContactStatus;
+
+    const result = await prisma.contact.updateMany({
+      where: { id: { in: ids }, userId: req.userId },
+      data: updateData,
+    });
+
+    // Add tag if specified
+    if (updates.addTagId) {
+      for (const contactId of ids) {
+        await prisma.contactTag.upsert({
+          where: { contactId_tagId: { contactId, tagId: updates.addTagId } },
+          update: {},
+          create: { contactId, tagId: updates.addTagId },
+        }).catch(() => {}); // ignore if contact doesn't exist
+      }
+    }
+
+    res.json({ message: `${result.count} contacts updated` });
+  } catch (error) {
+    console.error('Bulk update contacts error:', error);
+    res.status(500).json({ error: 'Failed to bulk update contacts' });
   }
 });
 

@@ -1,7 +1,9 @@
-import React, { useEffect, useState } from 'react';
-import { PlusIcon, StarIcon, ChatBubbleLeftRightIcon } from '@heroicons/react/24/outline';
-import { reviewsAPI, aiAPI, optionsAPI } from '../services/api';
+import { useEffect, useState } from 'react';
+import { PlusIcon, StarIcon, ArrowDownTrayIcon } from '@heroicons/react/24/outline';
+import { reviewsAPI, aiAPI, optionsAPI, exportAPI } from '../services/api';
 import toast from 'react-hot-toast';
+import { TableSkeleton } from '../components/Skeleton';
+import DetailModal from '../components/DetailModal';
 
 export default function Reviews() {
   const [reviews, setReviews] = useState<any[]>([]);
@@ -16,14 +18,34 @@ export default function Reviews() {
   const [response, setResponse] = useState('');
   const [generating, setGenerating] = useState(false);
   const [formData, setFormData] = useState({ platform: 'GOOGLE', rating: 5, content: '', authorName: '' });
+  const [sortBy] = useState('createdAt');
+  const [sortOrder] = useState<'asc' | 'desc'>('desc');
+  const [selectedItem, setSelectedItem] = useState<any>(null);
 
-  useEffect(() => { fetchReviews(); fetchStats(); fetchPlatforms(); fetchStatuses(); }, [platformFilter, statusFilter]);
+  const handleExportPDF = async () => {
+    try {
+      const { data } = await exportAPI.reviewsPDF();
+      const url = window.URL.createObjectURL(new Blob([data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'reviews.pdf';
+      link.click();
+      window.URL.revokeObjectURL(url);
+      toast.success('PDF exported!');
+    } catch (error) {
+      toast.error('Failed to export PDF');
+    }
+  };
+
+  useEffect(() => { fetchReviews(); fetchStats(); fetchPlatforms(); fetchStatuses(); }, [platformFilter, statusFilter, sortBy, sortOrder]);
 
   const fetchReviews = async () => {
     try {
       const params: any = {};
       if (platformFilter) params.platform = platformFilter;
       if (statusFilter) params.status = statusFilter;
+      if (sortBy) params.sortBy = sortBy;
+      if (sortOrder) params.sortOrder = sortOrder;
       const response = await reviewsAPI.getAll(params);
       setReviews(response.data);
     } catch (error) { toast.error('Failed to load reviews'); }
@@ -91,15 +113,20 @@ export default function Reviews() {
     finally { setGenerating(false); }
   };
 
-  if (loading) return <div className="flex items-center justify-center h-64"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div></div>;
+  if (loading) return <TableSkeleton rows={5} cols={5} />;
 
   return (
     <div>
       <div className="sm:flex sm:items-center sm:justify-between mb-6">
         <div><h1 className="text-2xl font-bold text-gray-900">Reviews</h1><p className="mt-1 text-sm text-gray-500">Monitor and respond to customer reviews</p></div>
-        <button onClick={() => setShowModal(true)} className="mt-4 sm:mt-0 inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700">
-          <PlusIcon className="-ml-1 mr-2 h-5 w-5" /> Add Review
-        </button>
+        <div className="mt-4 sm:mt-0 flex items-center gap-3">
+          <button onClick={handleExportPDF} className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
+            <ArrowDownTrayIcon className="-ml-1 mr-2 h-5 w-5" /> Export PDF
+          </button>
+          <button onClick={() => setShowModal(true)} className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700">
+            <PlusIcon className="-ml-1 mr-2 h-5 w-5" /> Add Review
+          </button>
+        </div>
       </div>
 
       {stats && (
@@ -130,7 +157,7 @@ export default function Reviews() {
         ) : (
           <div className="divide-y divide-gray-200">
             {reviews.map(review => (
-              <div key={review.id} className="p-6 hover:bg-gray-50">
+              <div key={review.id} className="p-6 hover:bg-gray-50 cursor-pointer" onClick={() => setSelectedItem(review)}>
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
                     <div className="flex items-center mb-2">
@@ -145,7 +172,7 @@ export default function Reviews() {
                     )}
                   </div>
                   {review.status === 'PENDING' && (
-                    <div className="ml-4 flex flex-col space-y-2">
+                    <div className="ml-4 flex flex-col space-y-2" onClick={(e) => e.stopPropagation()}>
                       <button onClick={() => { setResponseModal(review); setResponse(''); }} className="px-3 py-1 text-sm bg-primary-600 text-white rounded hover:bg-primary-700">Respond</button>
                       <button onClick={() => handleIgnore(review.id)} className="px-3 py-1 text-sm border border-gray-300 rounded hover:bg-gray-50">Ignore</button>
                     </div>
@@ -189,6 +216,52 @@ export default function Reviews() {
           </div>
         </div>
       )}
+
+      {/* Detail Modal */}
+      <DetailModal
+        isOpen={!!selectedItem}
+        onClose={() => setSelectedItem(null)}
+        title={`Review by ${selectedItem?.authorName || 'Unknown'}`}
+      >
+        {selectedItem && (
+          <div className="space-y-4">
+            <div>
+              <dt className="text-sm font-medium text-gray-500">Author</dt>
+              <dd className="mt-1 text-sm text-gray-900">{selectedItem.authorName}</dd>
+            </div>
+            <div>
+              <dt className="text-sm font-medium text-gray-500">Platform</dt>
+              <dd className="mt-1 text-sm text-gray-900">{selectedItem.platform}</dd>
+            </div>
+            <div>
+              <dt className="text-sm font-medium text-gray-500">Rating</dt>
+              <dd className="mt-1 flex">
+                {[1,2,3,4,5].map(star => (
+                  <StarIcon key={star} className={`h-5 w-5 ${star <= selectedItem.rating ? 'text-yellow-400 fill-current' : 'text-gray-300'}`} />
+                ))}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-sm font-medium text-gray-500">Content</dt>
+              <dd className="mt-1 text-sm text-gray-900">{selectedItem.content}</dd>
+            </div>
+            <div>
+              <dt className="text-sm font-medium text-gray-500">Status</dt>
+              <dd className="mt-1">
+                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${selectedItem.status === 'PENDING' ? 'bg-yellow-100 text-yellow-800' : selectedItem.status === 'RESPONDED' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>
+                  {selectedItem.status}
+                </span>
+              </dd>
+            </div>
+            {selectedItem.response && (
+              <div>
+                <dt className="text-sm font-medium text-gray-500">Response</dt>
+                <dd className="mt-1 text-sm text-gray-900 pl-3 border-l-2 border-primary-500">{selectedItem.response}</dd>
+              </div>
+            )}
+          </div>
+        )}
+      </DetailModal>
     </div>
   );
 }

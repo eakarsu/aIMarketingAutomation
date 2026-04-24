@@ -9,7 +9,7 @@ router.use(authMiddleware);
 router.get('/', async (req: AuthRequest, res: Response) => {
   try {
     const prisma: PrismaClient = req.app.get('prisma');
-    const { type, status, search } = req.query;
+    const { type, status, search, sortBy, sortOrder } = req.query;
 
     const where: any = { userId: req.userId };
     if (type) where.type = type;
@@ -21,6 +21,10 @@ router.get('/', async (req: AuthRequest, res: Response) => {
       ];
     }
 
+    const allowedSortFields = ['name', 'type', 'status', 'createdAt', 'updatedAt'];
+    const orderField = allowedSortFields.includes(sortBy as string) ? (sortBy as string) : 'createdAt';
+    const orderDir = sortOrder === 'asc' ? 'asc' : 'desc';
+
     const campaigns = await prisma.campaign.findMany({
       where,
       include: {
@@ -28,7 +32,7 @@ router.get('/', async (req: AuthRequest, res: Response) => {
         segment: { select: { id: true, name: true } },
         _count: { select: { recipients: true } },
       },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { [orderField]: orderDir },
     });
 
     res.json(campaigns);
@@ -275,6 +279,31 @@ router.post('/:id/duplicate', async (req: AuthRequest, res: Response) => {
   } catch (error) {
     console.error('Duplicate campaign error:', error);
     res.status(500).json({ error: 'Failed to duplicate campaign' });
+  }
+});
+
+// Bulk update campaigns
+router.put('/bulk-update', async (req: AuthRequest, res: Response) => {
+  try {
+    const prisma: PrismaClient = req.app.get('prisma');
+    const { ids, updates } = req.body;
+
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ error: 'No campaign IDs provided' });
+    }
+
+    const updateData: any = {};
+    if (updates.status) updateData.status = updates.status as CampaignStatus;
+
+    const result = await prisma.campaign.updateMany({
+      where: { id: { in: ids }, userId: req.userId },
+      data: updateData,
+    });
+
+    res.json({ message: `${result.count} campaigns updated` });
+  } catch (error) {
+    console.error('Bulk update campaigns error:', error);
+    res.status(500).json({ error: 'Failed to bulk update campaigns' });
   }
 });
 

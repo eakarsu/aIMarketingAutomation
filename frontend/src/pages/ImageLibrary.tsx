@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import {
   PlusIcon,
   TrashIcon,
@@ -13,6 +13,7 @@ import {
 } from '@heroicons/react/24/outline';
 import { imagesAPI } from '../services/api';
 import toast from 'react-hot-toast';
+import { GridSkeleton } from '../components/Skeleton';
 
 export default function ImageLibrary() {
   const [images, setImages] = useState<any[]>([]);
@@ -20,7 +21,6 @@ export default function ImageLibrary() {
   const [uploading, setUploading] = useState(false);
   const [selected, setSelected] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [previewImage, setPreviewImage] = useState<any>(null);
   const [dragActive, setDragActive] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -140,11 +140,7 @@ export default function ImageLibrary() {
   const aiGeneratedCount = images.filter((img) => img.isAIGenerated).length;
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
-      </div>
-    );
+    return <GridSkeleton count={8} />;
   }
 
   return (

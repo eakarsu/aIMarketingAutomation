@@ -9,7 +9,7 @@ router.use(authMiddleware);
 router.get('/', async (req: AuthRequest, res: Response) => {
   try {
     const prisma: PrismaClient = req.app.get('prisma');
-    const { published, search } = req.query;
+    const { published, search, sortBy, sortOrder } = req.query;
 
     const where: any = { userId: req.userId };
     if (published !== undefined) where.isPublished = published === 'true';
@@ -20,12 +20,16 @@ router.get('/', async (req: AuthRequest, res: Response) => {
       ];
     }
 
+    const allowedSort = ['name', 'slug', 'views', 'conversions', 'createdAt'];
+    const oField = allowedSort.includes(sortBy as string) ? (sortBy as string) : 'createdAt';
+    const oDir = sortOrder === 'asc' ? 'asc' : 'desc';
+
     const landingPages = await prisma.landingPage.findMany({
       where,
       include: {
         _count: { select: { forms: true } },
       },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { [oField]: oDir },
     });
 
     res.json(landingPages);

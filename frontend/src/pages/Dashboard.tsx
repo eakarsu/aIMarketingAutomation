@@ -1,16 +1,16 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   UsersIcon,
   MegaphoneIcon,
   RectangleStackIcon,
   StarIcon,
-  ArrowTrendingUpIcon,
   EnvelopeOpenIcon,
   CursorArrowRaysIcon,
 } from '@heroicons/react/24/outline';
 import { dashboardAPI } from '../services/api';
 import toast from 'react-hot-toast';
+import { DashboardSkeleton } from '../components/Skeleton';
 
 interface DashboardData {
   stats: {
@@ -48,11 +48,7 @@ export default function Dashboard() {
   };
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
-      </div>
-    );
+    return <DashboardSkeleton />;
   }
 
   const stats = data?.stats || {
@@ -160,7 +156,7 @@ export default function Dashboard() {
           <h3 className="text-lg font-medium text-gray-900 mb-4">Email Performance</h3>
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
             {performanceCards.map((card) => (
-              <div key={card.name} className="bg-gray-50 rounded-lg p-4">
+              <Link key={card.name} to="/analytics" className="bg-gray-50 rounded-lg p-4 hover:bg-gray-100 transition-colors">
                 <div className="flex items-center">
                   <card.icon className="h-8 w-8 text-primary-600" />
                   <div className="ml-4">
@@ -168,7 +164,7 @@ export default function Dashboard() {
                     <p className="text-2xl font-semibold text-gray-900">{card.value}</p>
                   </div>
                 </div>
-              </div>
+              </Link>
             ))}
           </div>
         </div>
@@ -191,7 +187,7 @@ export default function Dashboard() {
                 ) : (
                   data?.recent.campaigns.map((campaign: any) => (
                     <li key={campaign.id} className="py-4">
-                      <div className="flex items-center space-x-4">
+                      <Link to={`/campaigns/${campaign.id}`} className="flex items-center space-x-4 hover:bg-gray-50 -mx-4 px-4 py-2 rounded-md transition-colors">
                         <div className="flex-shrink-0">
                           <MegaphoneIcon className="h-8 w-8 text-gray-400" />
                         </div>
@@ -204,14 +200,13 @@ export default function Dashboard() {
                           </p>
                         </div>
                         <div>
-                          <Link
-                            to={`/campaigns/${campaign.id}`}
-                            className="inline-flex items-center rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50"
+                          <span
+                            className="inline-flex items-center rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300"
                           >
                             View
-                          </Link>
+                          </span>
                         </div>
-                      </div>
+                      </Link>
                     </li>
                   ))
                 )}
@@ -236,7 +231,7 @@ export default function Dashboard() {
                 ) : (
                   data?.recent.contacts.map((contact: any) => (
                     <li key={contact.id} className="py-4">
-                      <div className="flex items-center space-x-4">
+                      <Link to={`/contacts/${contact.id}`} className="flex items-center space-x-4 hover:bg-gray-50 -mx-4 px-4 py-2 rounded-md transition-colors">
                         <div className="flex-shrink-0">
                           <div className="h-8 w-8 rounded-full bg-primary-600 flex items-center justify-center text-white font-semibold">
                             {contact.firstName?.[0] || contact.email[0].toUpperCase()}
@@ -249,14 +244,13 @@ export default function Dashboard() {
                           <p className="truncate text-sm text-gray-500">{contact.email}</p>
                         </div>
                         <div>
-                          <Link
-                            to={`/contacts/${contact.id}`}
-                            className="inline-flex items-center rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50"
+                          <span
+                            className="inline-flex items-center rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300"
                           >
                             View
-                          </Link>
+                          </span>
                         </div>
-                      </div>
+                      </Link>
                     </li>
                   ))
                 )}

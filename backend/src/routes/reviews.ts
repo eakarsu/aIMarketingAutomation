@@ -9,7 +9,7 @@ router.use(authMiddleware);
 router.get('/', async (req: AuthRequest, res: Response) => {
   try {
     const prisma: PrismaClient = req.app.get('prisma');
-    const { platform, status, rating, search } = req.query;
+    const { platform, status, rating, search, sortBy, sortOrder } = req.query;
 
     const where: any = { userId: req.userId };
     if (platform) where.platform = platform;
@@ -22,12 +22,16 @@ router.get('/', async (req: AuthRequest, res: Response) => {
       ];
     }
 
+    const allowedSort = ['authorName', 'platform', 'rating', 'status', 'createdAt'];
+    const oField = allowedSort.includes(sortBy as string) ? (sortBy as string) : 'createdAt';
+    const oDir = sortOrder === 'asc' ? 'asc' : 'desc';
+
     const reviews = await prisma.review.findMany({
       where,
       include: {
         contact: { select: { id: true, email: true, firstName: true, lastName: true } },
       },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { [oField]: oDir },
     });
 
     res.json(reviews);

@@ -1,8 +1,9 @@
-import React, { useEffect, useState } from 'react';
-import { UserCircleIcon, BellIcon, KeyIcon, PaintBrushIcon, GlobeAltIcon } from '@heroicons/react/24/outline';
+import { useEffect, useState } from 'react';
+import { UserCircleIcon, BellIcon, KeyIcon, PaintBrushIcon } from '@heroicons/react/24/outline';
 import { authAPI } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import toast from 'react-hot-toast';
+import PasswordStrengthMeter from '../components/PasswordStrengthMeter';
 
 export default function Settings() {
   const { user } = useAuth();
@@ -152,6 +153,7 @@ export default function Settings() {
               <div>
                 <label className="block text-sm font-medium text-gray-700">New Password</label>
                 <input type="password" value={passwords.newPassword} onChange={e => setPasswords({...passwords, newPassword: e.target.value})} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500" />
+                <PasswordStrengthMeter password={passwords.newPassword} />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700">Confirm New Password</label>

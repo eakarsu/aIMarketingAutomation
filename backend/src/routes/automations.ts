@@ -9,11 +9,15 @@ router.use(authMiddleware);
 router.get('/', async (req: AuthRequest, res: Response) => {
   try {
     const prisma: PrismaClient = req.app.get('prisma');
-    const { type, status } = req.query;
+    const { type, status, sortBy, sortOrder } = req.query;
 
     const where: any = { userId: req.userId };
     if (type) where.type = type;
     if (status) where.status = status;
+
+    const allowedSort = ['name', 'type', 'status', 'createdAt'];
+    const oField = allowedSort.includes(sortBy as string) ? (sortBy as string) : 'createdAt';
+    const oDir = sortOrder === 'asc' ? 'asc' : 'desc';
 
     const automations = await prisma.automation.findMany({
       where,
@@ -21,7 +25,7 @@ router.get('/', async (req: AuthRequest, res: Response) => {
         segment: { select: { id: true, name: true } },
         _count: { select: { steps: true, enrollments: true } },
       },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { [oField]: oDir },
     });
 
     res.json(automations);

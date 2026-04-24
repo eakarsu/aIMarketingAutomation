@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { authAPI } from '../services/api';
 
 interface User {
@@ -6,8 +6,12 @@ interface User {
   email: string;
   firstName: string;
   lastName: string;
+  name?: string;
   company?: string;
+  phone?: string;
+  timezone?: string;
   role: string;
+  emailVerified?: boolean;
 }
 
 interface AuthContextType {
@@ -61,7 +65,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(data.user);
   };
 
-  const logout = () => {
+  const logout = async () => {
+    try {
+      await authAPI.logout();
+    } catch (error) {
+      // Ignore errors — clear local state regardless
+    }
     localStorage.removeItem('token');
     localStorage.removeItem('user');
     setToken(null);

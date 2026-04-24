@@ -78,6 +78,12 @@ export default function Login() {
               </div>
             </div>
 
+            <div className="flex items-center justify-end">
+              <Link to="/forgot-password" className="text-sm text-primary-600 hover:text-primary-500">
+                Forgot Password?
+              </Link>
+            </div>
+
             <div>
               <button
                 type="submit"
@@ -110,11 +116,21 @@ export default function Login() {
           </div>
 
           <div className="mt-6 bg-blue-50 p-4 rounded-md">
-            <p className="text-sm text-blue-800">
+            <p className="text-sm text-blue-800 mb-3">
               <strong>Demo credentials:</strong><br />
               Email: demo@example.com<br />
               Password: demo123
             </p>
+            <button
+              type="button"
+              onClick={() => {
+                setEmail('demo@example.com');
+                setPassword('demo123');
+              }}
+              className="w-full flex justify-center items-center px-4 py-2 bg-blue-600 text-white font-medium rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors"
+            >
+              Fill Demo Credentials
+            </button>
           </div>
         </div>
       </div>

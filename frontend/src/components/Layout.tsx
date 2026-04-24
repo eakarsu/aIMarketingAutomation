@@ -1,4 +1,4 @@
-import React, { useState, Fragment } from 'react';
+import { useState, Fragment } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Dialog, Menu, Transition } from '@headlessui/react';
 import {
@@ -9,9 +9,7 @@ import {
   RectangleGroupIcon,
   EnvelopeIcon,
   CogIcon,
-  ArrowRightOnRectangleIcon,
   Bars3Icon,
-  XMarkIcon,
   ChartBarIcon,
   StarIcon,
   PuzzlePieceIcon,
@@ -20,8 +18,11 @@ import {
   DocumentTextIcon,
   RectangleStackIcon,
   AdjustmentsHorizontalIcon,
+  ExclamationTriangleIcon,
 } from '@heroicons/react/24/outline';
 import { useAuth } from '../context/AuthContext';
+import { authAPI } from '../services/api';
+import toast from 'react-hot-toast';
 
 const navigation = [
   { name: 'Dashboard', href: '/', icon: HomeIcon },
@@ -37,9 +38,9 @@ const navigation = [
   { name: 'Image Library', href: '/images', icon: PhotoIcon },
   { name: 'Analytics', href: '/analytics', icon: ChartBarIcon },
   { name: 'Reviews', href: '/reviews', icon: StarIcon },
-  { name: 'Integrations', href: '/integrations', icon: PuzzlePieceIcon },
+  { name: 'Integrations', href: '/integrations', icon: PuzzlePieceIcon, adminOnly: true },
   { name: 'AI Tools', href: '/ai-tools', icon: SparklesIcon },
-];
+] as const;
 
 function classNames(...classes: string[]) {
   return classes.filter(Boolean).join(' ');
@@ -55,6 +56,24 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     logout();
     navigate('/login');
   };
+
+  const handleVerifyEmail = async () => {
+    try {
+      const { data } = await authAPI.sendVerification();
+      if (data.token) {
+        await authAPI.verifyEmail(data.token);
+        toast.success('Email verified!');
+        window.location.reload();
+      }
+    } catch (error) {
+      toast.error('Failed to verify email');
+    }
+  };
+
+  const filteredNav = navigation.filter((item) => {
+    if ('adminOnly' in item && item.adminOnly && user?.role !== 'ADMIN') return false;
+    return true;
+  });
 
   return (
     <div>
@@ -93,7 +112,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                     <ul role="list" className="flex flex-1 flex-col gap-y-7">
                       <li>
                         <ul role="list" className="-mx-2 space-y-1">
-                          {navigation.map((item) => (
+                          {filteredNav.map((item) => (
                             <li key={item.name}>
                               <Link
                                 to={item.href}
@@ -132,7 +151,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             <ul role="list" className="flex flex-1 flex-col gap-y-7">
               <li>
                 <ul role="list" className="-mx-2 space-y-1">
-                  {navigation.map((item) => (
+                  {filteredNav.map((item) => (
                     <li key={item.name}>
                       <Link
                         to={item.href}
@@ -237,6 +256,24 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             </div>
           </div>
         </div>
+
+        {/* Email verification banner */}
+        {user && user.emailVerified === false && (
+          <div className="bg-yellow-50 border-b border-yellow-200">
+            <div className="px-4 py-3 sm:px-6 lg:px-8 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <ExclamationTriangleIcon className="h-5 w-5 text-yellow-600" />
+                <p className="text-sm text-yellow-800">Your email is not verified.</p>
+              </div>
+              <button
+                onClick={handleVerifyEmail}
+                className="text-sm font-medium text-yellow-800 hover:text-yellow-900 underline"
+              >
+                Verify now
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Main content */}
         <main className="py-6">

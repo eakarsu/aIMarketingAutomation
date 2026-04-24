@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { SparklesIcon } from '@heroicons/react/24/outline';
 import toast from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
+import PasswordStrengthMeter from '../components/PasswordStrengthMeter';
 
 export default function Register() {
   const navigate = useNavigate();
@@ -137,6 +138,7 @@ export default function Register() {
                 onChange={handleChange}
                 className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-primary-500 focus:outline-none focus:ring-primary-500 sm:text-sm"
               />
+              <PasswordStrengthMeter password={formData.password} />
             </div>
 
             <div>

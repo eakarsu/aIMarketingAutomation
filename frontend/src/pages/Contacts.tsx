@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import {
   MagnifyingGlassIcon,
   PlusIcon,
@@ -8,20 +8,27 @@ import {
   ArrowUpTrayIcon,
   FunnelIcon,
 } from '@heroicons/react/24/outline';
-import { contactsAPI, tagsAPI } from '../services/api';
+import { contactsAPI, tagsAPI, exportAPI } from '../services/api';
 import toast from 'react-hot-toast';
+import ConfirmDialog from '../components/ConfirmDialog';
+import { TableSkeleton } from '../components/Skeleton';
+import SortableHeader from '../components/SortableHeader';
+import DetailModal from '../components/DetailModal';
 
 interface Contact {
   id: string;
   email: string;
   firstName?: string;
   lastName?: string;
+  phone?: string;
+  company?: string;
   status: string;
   tags: { id: string; tag: { id: string; name: string; color: string } }[];
   createdAt: string;
 }
 
 export default function Contacts() {
+  const navigate = useNavigate();
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [selectedContacts, setSelectedContacts] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
@@ -31,12 +38,17 @@ export default function Contacts() {
   const [tags, setTags] = useState<any[]>([]);
   const [statuses, setStatuses] = useState<string[]>([]);
   const [showFilters, setShowFilters] = useState(false);
+  const [sortBy, setSortBy] = useState('createdAt');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  const [selectedItem, setSelectedItem] = useState<any>(null);
+  const [confirmDelete, setConfirmDelete] = useState<{open: boolean; id: string; name: string}>({open: false, id: '', name: ''});
+  const [bulkStatusUpdate, setBulkStatusUpdate] = useState('');
 
   useEffect(() => {
     fetchContacts();
     fetchTags();
     fetchStatuses();
-  }, []);
+  }, [sortBy, sortOrder]);
 
   const fetchContacts = async () => {
     try {
@@ -44,6 +56,8 @@ export default function Contacts() {
       if (searchTerm) params.search = searchTerm;
       if (statusFilter) params.status = statusFilter;
       if (tagFilter) params.tagId = tagFilter;
+      params.sortBy = sortBy;
+      params.sortOrder = sortOrder;
 
       const response = await contactsAPI.getAll(params);
       // Backend returns { contacts: [...], pagination: {...} }
@@ -100,23 +114,55 @@ export default function Contacts() {
     }
   };
 
+  const handleSort = (field: string, order: 'asc' | 'desc') => {
+    setSortBy(field);
+    setSortOrder(order);
+  };
+
   const handleBulkDelete = async () => {
     if (selectedContacts.length === 0) {
       toast.error('No contacts selected');
       return;
     }
 
-    if (!confirm(`Are you sure you want to delete ${selectedContacts.length} contact(s)?`)) {
-      return;
-    }
+    setConfirmDelete({
+      open: true,
+      id: '__bulk__',
+      name: `${selectedContacts.length} contact(s)`,
+    });
+  };
 
+  const handleConfirmDelete = async () => {
     try {
-      await contactsAPI.bulkDelete(selectedContacts);
-      toast.success(`${selectedContacts.length} contact(s) deleted`);
-      setSelectedContacts([]);
+      if (confirmDelete.id === '__bulk__') {
+        await contactsAPI.bulkDelete(selectedContacts);
+        toast.success(`${selectedContacts.length} contact(s) deleted`);
+        setSelectedContacts([]);
+      } else {
+        await contactsAPI.delete(confirmDelete.id);
+        toast.success('Contact deleted');
+      }
+      setConfirmDelete({ open: false, id: '', name: '' });
       fetchContacts();
     } catch (error: any) {
-      toast.error(error.response?.data?.error || 'Failed to delete contacts');
+      toast.error(error.response?.data?.error || 'Failed to delete');
+      setConfirmDelete({ open: false, id: '', name: '' });
+    }
+  };
+
+  const handleBulkStatusUpdate = async (status: string) => {
+    if (selectedContacts.length === 0) {
+      toast.error('No contacts selected');
+      return;
+    }
+    try {
+      await contactsAPI.bulkUpdate(selectedContacts, { status });
+      toast.success(`${selectedContacts.length} contact(s) updated to ${status}`);
+      setSelectedContacts([]);
+      setBulkStatusUpdate('');
+      fetchContacts();
+    } catch (error: any) {
+      toast.error(error.response?.data?.error || 'Failed to update contacts');
     }
   };
 
@@ -136,12 +182,23 @@ export default function Contacts() {
     }
   };
 
+  const handleExportPDF = async () => {
+    try {
+      const { data } = await exportAPI.contactsPDF();
+      const url = window.URL.createObjectURL(new Blob([data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'contacts.pdf';
+      link.click();
+      window.URL.revokeObjectURL(url);
+      toast.success('PDF exported!');
+    } catch (error) {
+      toast.error('Failed to export PDF');
+    }
+  };
+
   if (loading && contacts.length === 0) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
-      </div>
-    );
+    return <TableSkeleton rows={5} cols={6} />;
   }
 
   return (
@@ -254,13 +311,29 @@ export default function Contacts() {
             <span className="text-sm text-primary-900">
               {selectedContacts.length} contact(s) selected
             </span>
-            <button
-              onClick={handleBulkDelete}
-              className="inline-flex items-center px-3 py-1.5 border border-transparent text-sm font-medium rounded-md text-red-700 bg-red-100 hover:bg-red-200"
-            >
-              <TrashIcon className="h-4 w-4 mr-1" />
-              Delete Selected
-            </button>
+            <div className="flex items-center gap-2">
+              <select
+                value={bulkStatusUpdate}
+                onChange={(e) => {
+                  if (e.target.value) {
+                    handleBulkStatusUpdate(e.target.value);
+                  }
+                }}
+                className="rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-primary-500 focus:outline-none focus:ring-primary-500"
+              >
+                <option value="">Update Status...</option>
+                {statuses.map((status) => (
+                  <option key={status} value={status}>{status}</option>
+                ))}
+              </select>
+              <button
+                onClick={handleBulkDelete}
+                className="inline-flex items-center px-3 py-1.5 border border-transparent text-sm font-medium rounded-md text-red-700 bg-red-100 hover:bg-red-200"
+              >
+                <TrashIcon className="h-4 w-4 mr-1" />
+                Delete Selected
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -272,7 +345,14 @@ export default function Contacts() {
           className="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
         >
           <ArrowDownTrayIcon className="h-4 w-4 mr-2" />
-          Export
+          Export CSV
+        </button>
+        <button
+          onClick={handleExportPDF}
+          className="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
+        >
+          <ArrowDownTrayIcon className="h-4 w-4 mr-2" />
+          Export PDF
         </button>
         <Link
           to="/contacts/import"
@@ -296,21 +376,13 @@ export default function Contacts() {
                   className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
                 />
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Name
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Email
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Status
-              </th>
+              <SortableHeader label="Name" field="firstName" currentSort={sortBy} currentOrder={sortOrder} onSort={handleSort} />
+              <SortableHeader label="Email" field="email" currentSort={sortBy} currentOrder={sortOrder} onSort={handleSort} />
+              <SortableHeader label="Status" field="status" currentSort={sortBy} currentOrder={sortOrder} onSort={handleSort} />
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Tags
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Created
-              </th>
+              <SortableHeader label="Created" field="createdAt" currentSort={sortBy} currentOrder={sortOrder} onSort={handleSort} />
               <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Actions
               </th>
@@ -325,8 +397,8 @@ export default function Contacts() {
               </tr>
             ) : (
               contacts.map((contact) => (
-                <tr key={contact.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 whitespace-nowrap">
+                <tr key={contact.id} className="hover:bg-gray-50 cursor-pointer" onClick={() => setSelectedItem(contact)}>
+                  <td className="px-6 py-4 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                     <input
                       type="checkbox"
                       checked={selectedContacts.includes(contact.id)}
@@ -380,7 +452,7 @@ export default function Contacts() {
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     {new Date(contact.createdAt).toLocaleDateString()}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium" onClick={(e) => e.stopPropagation()}>
                     <Link
                       to={`/contacts/${contact.id}`}
                       className="text-primary-600 hover:text-primary-900 mr-4"
@@ -400,6 +472,86 @@ export default function Contacts() {
           </tbody>
         </table>
       </div>
+
+      {/* Confirm Delete Dialog */}
+      <ConfirmDialog
+        isOpen={confirmDelete.open}
+        onClose={() => setConfirmDelete({ open: false, id: '', name: '' })}
+        onConfirm={handleConfirmDelete}
+        title="Delete Contact"
+        message={`Are you sure you want to delete ${confirmDelete.name}? This action cannot be undone.`}
+        confirmText="Delete"
+        variant="danger"
+      />
+
+      {/* Contact Detail Modal */}
+      <DetailModal
+        isOpen={!!selectedItem}
+        onClose={() => setSelectedItem(null)}
+        title={`${selectedItem?.firstName || ''} ${selectedItem?.lastName || ''}`.trim() || 'Contact Details'}
+        onEdit={() => {
+          navigate(`/contacts/${selectedItem?.id}/edit`);
+          setSelectedItem(null);
+        }}
+        onDelete={() => {
+          setConfirmDelete({
+            open: true,
+            id: selectedItem?.id || '',
+            name: `${selectedItem?.firstName || ''} ${selectedItem?.lastName || ''}`.trim() || selectedItem?.email || '',
+          });
+          setSelectedItem(null);
+        }}
+      >
+        {selectedItem && (
+          <div className="space-y-4">
+            <div>
+              <p className="text-sm font-medium text-gray-500">Name</p>
+              <p className="mt-1 text-sm text-gray-900">{selectedItem.firstName} {selectedItem.lastName}</p>
+            </div>
+            <div>
+              <p className="text-sm font-medium text-gray-500">Email</p>
+              <p className="mt-1 text-sm text-gray-900">{selectedItem.email}</p>
+            </div>
+            <div>
+              <p className="text-sm font-medium text-gray-500">Phone</p>
+              <p className="mt-1 text-sm text-gray-900">{selectedItem.phone || 'N/A'}</p>
+            </div>
+            <div>
+              <p className="text-sm font-medium text-gray-500">Company</p>
+              <p className="mt-1 text-sm text-gray-900">{selectedItem.company || 'N/A'}</p>
+            </div>
+            <div>
+              <p className="text-sm font-medium text-gray-500">Status</p>
+              <span className={`mt-1 px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                selectedItem.status === 'ACTIVE' ? 'bg-green-100 text-green-800' :
+                selectedItem.status === 'INACTIVE' ? 'bg-gray-100 text-gray-800' :
+                selectedItem.status === 'UNSUBSCRIBED' ? 'bg-red-100 text-red-800' :
+                'bg-yellow-100 text-yellow-800'
+              }`}>
+                {selectedItem.status}
+              </span>
+            </div>
+            <div>
+              <p className="text-sm font-medium text-gray-500">Tags</p>
+              <div className="mt-1 flex flex-wrap gap-1">
+                {selectedItem.tags?.length > 0 ? selectedItem.tags.map((contactTag: any) => (
+                  <span
+                    key={contactTag.tag.id}
+                    className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium"
+                    style={{ backgroundColor: contactTag.tag.color + '20', color: contactTag.tag.color }}
+                  >
+                    {contactTag.tag.name}
+                  </span>
+                )) : <p className="text-sm text-gray-400">No tags</p>}
+              </div>
+            </div>
+            <div>
+              <p className="text-sm font-medium text-gray-500">Created</p>
+              <p className="mt-1 text-sm text-gray-900">{new Date(selectedItem.createdAt).toLocaleDateString()}</p>
+            </div>
+          </div>
+        )}
+      </DetailModal>
     </div>
   );
 }

@@ -4,8 +4,19 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { body, validationResult } from 'express-validator';
 import { authMiddleware, AuthRequest } from '../middleware/auth';
+import { v4 as uuidv4 } from 'uuid';
 
 const router = Router();
+
+function validatePasswordStrength(password: string): string[] {
+  const errors: string[] = [];
+  if (password.length < 8) errors.push('Password must be at least 8 characters');
+  if (!/[A-Z]/.test(password)) errors.push('Password must contain an uppercase letter');
+  if (!/[a-z]/.test(password)) errors.push('Password must contain a lowercase letter');
+  if (!/[0-9]/.test(password)) errors.push('Password must contain a number');
+  if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password)) errors.push('Password must contain a special character');
+  return errors;
+}
 
 // Register
 router.post('/register', [
@@ -23,6 +34,12 @@ router.post('/register', [
     const prisma: PrismaClient = req.app.get('prisma');
     const { email, password, firstName, lastName, company } = req.body;
 
+    // Password strength validation
+    const strengthErrors = validatePasswordStrength(password);
+    if (strengthErrors.length > 0) {
+      return res.status(400).json({ error: strengthErrors[0], passwordErrors: strengthErrors });
+    }
+
     const existingUser = await prisma.user.findUnique({ where: { email } });
     if (existingUser) {
       return res.status(400).json({ error: 'User already exists' });
@@ -36,6 +53,7 @@ router.post('/register', [
         firstName,
         lastName,
         company,
+        emailVerified: false,
       },
     });
 
@@ -48,6 +66,7 @@ router.post('/register', [
         firstName: user.firstName,
         lastName: user.lastName,
         company: user.company,
+        emailVerified: user.emailVerified,
       },
       token,
     });
@@ -57,7 +76,7 @@ router.post('/register', [
   }
 });
 
-// Login
+// Login — does NOT enforce password strength (demo123 still works)
 router.post('/login', [
   body('email').isEmail().normalizeEmail(),
   body('password').notEmpty(),
@@ -90,6 +109,8 @@ router.post('/login', [
         firstName: user.firstName,
         lastName: user.lastName,
         company: user.company,
+        role: user.role,
+        emailVerified: user.emailVerified,
       },
       token,
     });
@@ -97,6 +118,11 @@ router.post('/login', [
     console.error('Login error:', error);
     res.status(500).json({ error: 'Login failed' });
   }
+});
+
+// Logout
+router.post('/logout', authMiddleware, async (req: AuthRequest, res: Response) => {
+  res.json({ message: 'Logged out successfully' });
 });
 
 // Get current user
@@ -112,6 +138,7 @@ router.get('/me', authMiddleware, async (req: AuthRequest, res: Response) => {
         lastName: true,
         company: true,
         role: true,
+        emailVerified: true,
         createdAt: true,
       },
     });
@@ -167,7 +194,7 @@ router.put('/me', authMiddleware, async (req: AuthRequest, res: Response) => {
   }
 });
 
-// Change password
+// Change password (with strength validation)
 router.post('/change-password', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const prisma: PrismaClient = req.app.get('prisma');
@@ -183,6 +210,11 @@ router.post('/change-password', authMiddleware, async (req: AuthRequest, res: Re
       return res.status(400).json({ error: 'Current password is incorrect' });
     }
 
+    const strengthErrors = validatePasswordStrength(newPassword);
+    if (strengthErrors.length > 0) {
+      return res.status(400).json({ error: strengthErrors[0], passwordErrors: strengthErrors });
+    }
+
     const hashedPassword = await bcrypt.hash(newPassword, 10);
     await prisma.user.update({
       where: { id: req.userId },
@@ -193,6 +225,111 @@ router.post('/change-password', authMiddleware, async (req: AuthRequest, res: Re
   } catch (error) {
     console.error('Change password error:', error);
     res.status(500).json({ error: 'Failed to change password' });
+  }
+});
+
+// Forgot password
+router.post('/forgot-password', async (req: Request, res: Response) => {
+  try {
+    const prisma: PrismaClient = req.app.get('prisma');
+    const { email } = req.body;
+
+    const user = await prisma.user.findUnique({ where: { email } });
+    if (!user) {
+      // Don't reveal whether user exists
+      return res.json({ message: 'If an account exists, a reset link has been sent' });
+    }
+
+    const token = uuidv4();
+    await prisma.passwordReset.create({
+      data: {
+        userId: user.id,
+        token,
+        expiresAt: new Date(Date.now() + 60 * 60 * 1000), // 1 hour
+      },
+    });
+
+    // In demo mode, return the token directly
+    res.json({ message: 'If an account exists, a reset link has been sent', token });
+  } catch (error) {
+    console.error('Forgot password error:', error);
+    res.status(500).json({ error: 'Failed to process request' });
+  }
+});
+
+// Reset password
+router.post('/reset-password', async (req: Request, res: Response) => {
+  try {
+    const prisma: PrismaClient = req.app.get('prisma');
+    const { token, password } = req.body;
+
+    const reset = await prisma.passwordReset.findUnique({ where: { token } });
+    if (!reset || reset.used || reset.expiresAt < new Date()) {
+      return res.status(400).json({ error: 'Invalid or expired reset token' });
+    }
+
+    const strengthErrors = validatePasswordStrength(password);
+    if (strengthErrors.length > 0) {
+      return res.status(400).json({ error: strengthErrors[0], passwordErrors: strengthErrors });
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+    await prisma.user.update({
+      where: { id: reset.userId },
+      data: { password: hashedPassword },
+    });
+
+    await prisma.passwordReset.update({
+      where: { id: reset.id },
+      data: { used: true },
+    });
+
+    res.json({ message: 'Password has been reset successfully' });
+  } catch (error) {
+    console.error('Reset password error:', error);
+    res.status(500).json({ error: 'Failed to reset password' });
+  }
+});
+
+// Send email verification
+router.post('/send-verification', authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const prisma: PrismaClient = req.app.get('prisma');
+    const token = uuidv4();
+
+    await prisma.user.update({
+      where: { id: req.userId },
+      data: { verificationToken: token },
+    });
+
+    // In demo mode, return the token
+    res.json({ message: 'Verification email sent', token });
+  } catch (error) {
+    console.error('Send verification error:', error);
+    res.status(500).json({ error: 'Failed to send verification' });
+  }
+});
+
+// Verify email
+router.post('/verify-email', async (req: Request, res: Response) => {
+  try {
+    const prisma: PrismaClient = req.app.get('prisma');
+    const { token } = req.body;
+
+    const user = await prisma.user.findUnique({ where: { verificationToken: token } });
+    if (!user) {
+      return res.status(400).json({ error: 'Invalid verification token' });
+    }
+
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { emailVerified: true, verificationToken: null },
+    });
+
+    res.json({ message: 'Email verified successfully' });
+  } catch (error) {
+    console.error('Verify email error:', error);
+    res.status(500).json({ error: 'Failed to verify email' });
   }
 });
 

@@ -33,12 +33,17 @@ api.interceptors.response.use(
 export const authAPI = {
   login: (email: string, password: string) => api.post('/auth/login', { email, password }),
   register: (data: any) => api.post('/auth/register', data),
+  logout: () => api.post('/auth/logout'),
   getMe: () => api.get('/auth/me'),
   updateMe: (data: any) => api.put('/auth/me', data),
   updateProfile: (data: any) => api.put('/auth/me', data),
   changePassword: (data: { currentPassword: string; newPassword: string }) => api.post('/auth/change-password', data),
   updateNotifications: (data: any) => api.put('/auth/notifications', data),
   updateBranding: (data: any) => api.put('/auth/branding', data),
+  forgotPassword: (email: string) => api.post('/auth/forgot-password', { email }),
+  resetPassword: (token: string, password: string) => api.post('/auth/reset-password', { token, password }),
+  sendVerification: () => api.post('/auth/send-verification'),
+  verifyEmail: (token: string) => api.post('/auth/verify-email', { token }),
 };
 
 // Dashboard
@@ -60,6 +65,7 @@ export const campaignsAPI = {
   duplicate: (id: string) => api.post(`/campaigns/${id}/duplicate`),
   getTypes: () => api.get('/campaigns/options/types'),
   getStatuses: () => api.get('/campaigns/options/statuses'),
+  bulkUpdate: (ids: string[], updates: any) => api.put('/campaigns/bulk-update', { ids, updates }),
 };
 
 // Contacts
@@ -74,6 +80,7 @@ export const contactsAPI = {
   exportCSV: () => api.get('/contacts/export/csv', { responseType: 'blob' }),
   optOut: (id: string) => api.post(`/contacts/${id}/opt-out`),
   getStatuses: () => api.get('/contacts/options/statuses'),
+  bulkUpdate: (ids: string[], updates: any) => api.put('/contacts/bulk-update', { ids, updates }),
 };
 
 // Segments
@@ -149,7 +156,7 @@ export const landingPagesAPI = {
 
 // Forms
 export const formsAPI = {
-  getAll: () => api.get('/forms'),
+  getAll: (params?: any) => api.get('/forms', { params }),
   getOne: (id: string) => api.get(`/forms/${id}`),
   create: (data: any) => api.post('/forms', data),
   update: (id: string, data: any) => api.put(`/forms/${id}`, data),
@@ -239,6 +246,80 @@ export const aiAPI = {
   predict: (data: any) => api.post('/ai/predict', data),
   generateImage: (data: any) => api.post('/ai/image', data),
   getHistory: (type?: string, limit?: number) => api.get('/ai/history', { params: { type, limit } }),
+
+  // AI Segment Builder
+  getAISegments: () => api.get('/ai/segments'),
+  getAISegment: (id: string) => api.get(`/ai/segments/${id}`),
+  buildSegment: (data: any) => api.post('/ai/segments/build', data),
+  updateAISegment: (id: string, data: any) => api.put(`/ai/segments/${id}`, data),
+  deleteAISegment: (id: string) => api.delete(`/ai/segments/${id}`),
+
+  // AI Journey Optimizer
+  getJourneys: () => api.get('/ai/journeys'),
+  getJourney: (id: string) => api.get(`/ai/journeys/${id}`),
+  optimizeJourney: (data: any) => api.post('/ai/journeys/optimize', data),
+  updateJourney: (id: string, data: any) => api.put(`/ai/journeys/${id}`, data),
+  deleteJourney: (id: string) => api.delete(`/ai/journeys/${id}`),
+
+  // AI Attribution Modeler
+  getAttributions: () => api.get('/ai/attributions'),
+  getAttribution: (id: string) => api.get(`/ai/attributions/${id}`),
+  analyzeAttribution: (data: any) => api.post('/ai/attributions/analyze', data),
+  deleteAttribution: (id: string) => api.delete(`/ai/attributions/${id}`),
+
+  // AI Budget Allocator
+  getBudgets: () => api.get('/ai/budgets'),
+  getBudget: (id: string) => api.get(`/ai/budgets/${id}`),
+  allocateBudget: (data: any) => api.post('/ai/budgets/allocate', data),
+  deleteBudget: (id: string) => api.delete(`/ai/budgets/${id}`),
+
+  // AI Fatigue Detector
+  getFatigues: () => api.get('/ai/fatigues'),
+  getFatigue: (id: string) => api.get(`/ai/fatigues/${id}`),
+  detectFatigue: (data: any) => api.post('/ai/fatigues/detect', data),
+  deleteFatigue: (id: string) => api.delete(`/ai/fatigues/${id}`),
+
+  // AI Customer Persona Creator
+  getPersonas: () => api.get('/ai/personas'),
+  getPersona: (id: string) => api.get(`/ai/personas/${id}`),
+  createPersona: (data: any) => api.post('/ai/personas/create', data),
+  updatePersona: (id: string, data: any) => api.put(`/ai/personas/${id}`, data),
+  deletePersona: (id: string) => api.delete(`/ai/personas/${id}`),
+
+  // AI Influencer Matcher
+  getInfluencers: () => api.get('/ai/influencers'),
+  getInfluencer: (id: string) => api.get(`/ai/influencers/${id}`),
+  matchInfluencers: (data: any) => api.post('/ai/influencers/match', data),
+  updateInfluencer: (id: string, data: any) => api.put(`/ai/influencers/${id}`, data),
+  deleteInfluencer: (id: string) => api.delete(`/ai/influencers/${id}`),
+
+  // AI Hashtag Generator
+  getHashtags: () => api.get('/ai/hashtags'),
+  getHashtag: (id: string) => api.get(`/ai/hashtags/${id}`),
+  generateHashtags: (data: any) => api.post('/ai/hashtags/generate', data),
+  deleteHashtag: (id: string) => api.delete(`/ai/hashtags/${id}`),
+
+  // AI Landing Page Builder
+  getAILandingPages: () => api.get('/ai/landing-pages'),
+  getAILandingPage: (id: string) => api.get(`/ai/landing-pages/${id}`),
+  generateLandingPage: (data: any) => api.post('/ai/landing-pages/generate', data),
+  updateAILandingPage: (id: string, data: any) => api.put(`/ai/landing-pages/${id}`, data),
+  deleteAILandingPage: (id: string) => api.delete(`/ai/landing-pages/${id}`),
+
+  // AI Email Campaign Writer
+  getEmailCampaigns: () => api.get('/ai/email-campaigns'),
+  getEmailCampaign: (id: string) => api.get(`/ai/email-campaigns/${id}`),
+  generateEmailCampaign: (data: any) => api.post('/ai/email-campaigns/generate', data),
+  updateEmailCampaign: (id: string, data: any) => api.put(`/ai/email-campaigns/${id}`, data),
+  deleteEmailCampaign: (id: string) => api.delete(`/ai/email-campaigns/${id}`),
+};
+
+// Export
+export const exportAPI = {
+  campaignsPDF: () => api.get('/export/pdf/campaigns', { responseType: 'blob' }),
+  contactsPDF: () => api.get('/export/pdf/contacts', { responseType: 'blob' }),
+  analyticsPDF: () => api.get('/export/pdf/analytics', { responseType: 'blob' }),
+  reviewsPDF: () => api.get('/export/pdf/reviews', { responseType: 'blob' }),
 };
 
 // Options (for dropdowns)

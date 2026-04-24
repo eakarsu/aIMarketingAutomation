@@ -1,7 +1,8 @@
-import React, { useEffect, useState } from 'react';
-import { ChartBarIcon, EnvelopeOpenIcon, CursorArrowRaysIcon, ArrowTrendingUpIcon } from '@heroicons/react/24/outline';
-import { analyticsAPI } from '../services/api';
+import { useEffect, useState } from 'react';
+import { EnvelopeOpenIcon, CursorArrowRaysIcon, ArrowTrendingUpIcon } from '@heroicons/react/24/outline';
+import { analyticsAPI, exportAPI } from '../services/api';
 import toast from 'react-hot-toast';
+import { CardSkeleton } from '../components/Skeleton';
 
 export default function Analytics() {
   const [data, setData] = useState<any>(null);
@@ -20,7 +21,22 @@ export default function Analytics() {
     finally { setLoading(false); }
   };
 
-  if (loading) return <div className="flex items-center justify-center h-64"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div></div>;
+  const handleExportPDF = async () => {
+    try {
+      const { data } = await exportAPI.analyticsPDF();
+      const url = window.URL.createObjectURL(new Blob([data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'analytics.pdf';
+      link.click();
+      window.URL.revokeObjectURL(url);
+      toast.success('PDF exported!');
+    } catch (error) {
+      toast.error('Failed to export PDF');
+    }
+  };
+
+  if (loading) return <CardSkeleton count={4} />;
 
   const stats = [
     { name: 'Total Sent', value: data?.email?.totalSent || 0, icon: EnvelopeOpenIcon, color: 'text-blue-600' },
@@ -33,11 +49,19 @@ export default function Analytics() {
     <div>
       <div className="sm:flex sm:items-center sm:justify-between mb-6">
         <div><h1 className="text-2xl font-bold text-gray-900">Analytics</h1><p className="mt-1 text-sm text-gray-500">Track your marketing performance</p></div>
-        <select value={period} onChange={e => setPeriod(parseInt(e.target.value))} className="mt-4 sm:mt-0 rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500">
-          <option value={7}>Last 7 days</option>
-          <option value={30}>Last 30 days</option>
-          <option value={90}>Last 90 days</option>
-        </select>
+        <div className="flex items-center gap-3 mt-4 sm:mt-0">
+          <select value={period} onChange={e => setPeriod(parseInt(e.target.value))} className="rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500">
+            <option value={7}>Last 7 days</option>
+            <option value={30}>Last 30 days</option>
+            <option value={90}>Last 90 days</option>
+          </select>
+          <button
+            onClick={handleExportPDF}
+            className="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
+          >
+            Export PDF
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4 mb-8">

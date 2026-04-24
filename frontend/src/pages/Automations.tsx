@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import {
   PlusIcon,
   TrashIcon,
@@ -18,6 +18,9 @@ import {
 } from '@heroicons/react/24/outline';
 import { automationsAPI, optionsAPI } from '../services/api';
 import toast from 'react-hot-toast';
+import ConfirmDialog from '../components/ConfirmDialog';
+import { CardSkeleton } from '../components/Skeleton';
+import DetailModal from '../components/DetailModal';
 
 const STATUS_CONFIG: Record<string, { color: string; bgColor: string; dotColor: string }> = {
   ACTIVE: { color: 'text-green-700', bgColor: 'bg-green-50', dotColor: 'bg-green-500' },
@@ -35,6 +38,7 @@ const TYPE_ICONS: Record<string, any> = {
 };
 
 export default function Automations() {
+  const navigate = useNavigate();
   const [automations, setAutomations] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [typeFilter, setTypeFilter] = useState('');
@@ -42,17 +46,23 @@ export default function Automations() {
   const [types, setTypes] = useState<any[]>([]);
   const [statuses, setStatuses] = useState<any[]>([]);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [sortBy] = useState('createdAt');
+  const [sortOrder] = useState<'asc' | 'desc'>('desc');
+  const [selectedItem, setSelectedItem] = useState<any>(null);
+  const [confirmDelete, setConfirmDelete] = useState<{ id: string; name: string } | null>(null);
 
   useEffect(() => {
     fetchAutomations();
     fetchOptions();
-  }, [typeFilter, statusFilter]);
+  }, [typeFilter, statusFilter, sortBy, sortOrder]);
 
   const fetchAutomations = async () => {
     try {
       const params: any = {};
       if (typeFilter) params.type = typeFilter;
       if (statusFilter) params.status = statusFilter;
+      if (sortBy) params.sortBy = sortBy;
+      if (sortOrder) params.sortOrder = sortOrder;
       const response = await automationsAPI.getAll(params);
       setAutomations(response.data);
     } catch (error) {
@@ -101,11 +111,12 @@ export default function Automations() {
     }
   };
 
-  const handleDelete = async (id: string, name: string) => {
-    if (!confirm(`Are you sure you want to delete "${name}"?`)) return;
+  const handleDelete = async () => {
+    if (!confirmDelete) return;
     try {
-      await automationsAPI.delete(id);
+      await automationsAPI.delete(confirmDelete.id);
       toast.success('Automation deleted successfully');
+      setConfirmDelete(null);
       fetchAutomations();
     } catch (error) {
       toast.error('Failed to delete automation');
@@ -125,11 +136,7 @@ export default function Automations() {
   const totalEnrollments = automations.reduce((sum, a) => sum + (a._count?.enrollments || 0), 0);
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
-      </div>
-    );
+    return <CardSkeleton count={8} />;
   }
 
   return (
@@ -281,7 +288,8 @@ export default function Automations() {
               return (
                 <div
                   key={auto.id}
-                  className="group relative border border-gray-200 rounded-xl p-5 hover:shadow-lg hover:border-gray-300 transition-all duration-200"
+                  className="group relative border border-gray-200 rounded-xl p-5 hover:shadow-lg hover:border-gray-300 transition-all duration-200 cursor-pointer"
+                  onClick={() => setSelectedItem(auto)}
                 >
                   <div className="flex items-start justify-between">
                     <div className="flex items-center">
@@ -293,6 +301,7 @@ export default function Automations() {
                           <Link
                             to={`/automations/${auto.id}/edit`}
                             className="text-base font-semibold text-gray-900 hover:text-primary-600"
+                            onClick={(e) => e.stopPropagation()}
                           >
                             {auto.name}
                           </Link>
@@ -311,7 +320,7 @@ export default function Automations() {
                     <div className="flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
                       {auto.status === 'ACTIVE' ? (
                         <button
-                          onClick={() => handlePause(auto.id)}
+                          onClick={(e) => { e.stopPropagation(); handlePause(auto.id); }}
                           disabled={actionLoading === auto.id}
                           className="p-2 text-gray-400 hover:text-yellow-600 hover:bg-yellow-50 rounded-lg transition-colors disabled:opacity-50"
                           title="Pause automation"
@@ -320,7 +329,7 @@ export default function Automations() {
                         </button>
                       ) : (
                         <button
-                          onClick={() => handleActivate(auto.id)}
+                          onClick={(e) => { e.stopPropagation(); handleActivate(auto.id); }}
                           disabled={actionLoading === auto.id}
                           className="p-2 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors disabled:opacity-50"
                           title="Activate automation"
@@ -332,11 +341,12 @@ export default function Automations() {
                         to={`/automations/${auto.id}/edit`}
                         className="p-2 text-gray-400 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors"
                         title="Edit automation"
+                        onClick={(e) => e.stopPropagation()}
                       >
                         <PencilIcon className="h-4 w-4" />
                       </Link>
                       <button
-                        onClick={() => handleDelete(auto.id, auto.name)}
+                        onClick={(e) => { e.stopPropagation(); setConfirmDelete({ id: auto.id, name: auto.name }); }}
                         className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                         title="Delete automation"
                       >
@@ -389,6 +399,59 @@ export default function Automations() {
           </div>
         )}
       </div>
+
+      {/* Confirm Delete Dialog */}
+      <ConfirmDialog
+        isOpen={!!confirmDelete}
+        onClose={() => setConfirmDelete(null)}
+        onConfirm={handleDelete}
+        title="Delete Automation"
+        message={`Are you sure you want to delete "${confirmDelete?.name}"? This action cannot be undone.`}
+        confirmText="Delete"
+        variant="danger"
+      />
+
+      {/* Detail Modal */}
+      <DetailModal
+        isOpen={!!selectedItem}
+        onClose={() => setSelectedItem(null)}
+        title={selectedItem?.name || 'Automation Details'}
+        onEdit={() => { navigate(`/automations/${selectedItem?.id}/edit`); setSelectedItem(null); }}
+        onDelete={() => { setConfirmDelete({ id: selectedItem?.id, name: selectedItem?.name }); setSelectedItem(null); }}
+      >
+        {selectedItem && (
+          <div className="space-y-4">
+            <div>
+              <dt className="text-sm font-medium text-gray-500">Name</dt>
+              <dd className="mt-1 text-sm text-gray-900">{selectedItem.name}</dd>
+            </div>
+            <div>
+              <dt className="text-sm font-medium text-gray-500">Type</dt>
+              <dd className="mt-1 text-sm text-gray-900">{types.find((t) => t.value === selectedItem.type)?.label || selectedItem.type}</dd>
+            </div>
+            <div>
+              <dt className="text-sm font-medium text-gray-500">Status</dt>
+              <dd className="mt-1">
+                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusConfig(selectedItem.status).bgColor} ${getStatusConfig(selectedItem.status).color}`}>
+                  {selectedItem.status}
+                </span>
+              </dd>
+            </div>
+            <div>
+              <dt className="text-sm font-medium text-gray-500">Description</dt>
+              <dd className="mt-1 text-sm text-gray-900">{selectedItem.description || 'No description'}</dd>
+            </div>
+            <div>
+              <dt className="text-sm font-medium text-gray-500">Steps</dt>
+              <dd className="mt-1 text-sm text-gray-900">{selectedItem._count?.steps || 0}</dd>
+            </div>
+            <div>
+              <dt className="text-sm font-medium text-gray-500">Enrollments</dt>
+              <dd className="mt-1 text-sm text-gray-900">{selectedItem._count?.enrollments || 0}</dd>
+            </div>
+          </div>
+        )}
+      </DetailModal>
     </div>
   );
 }

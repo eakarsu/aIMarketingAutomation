@@ -9,13 +9,18 @@ router.use(authMiddleware);
 router.get('/', async (req: AuthRequest, res: Response) => {
   try {
     const prisma: PrismaClient = req.app.get('prisma');
+    const { sortBy, sortOrder } = req.query;
+    const allowedSort = ['name', 'createdAt'];
+    const oField = allowedSort.includes(sortBy as string) ? (sortBy as string) : 'createdAt';
+    const oDir = sortOrder === 'asc' ? 'asc' : 'desc';
+
     const forms = await prisma.form.findMany({
       where: { userId: req.userId },
       include: {
         landingPage: { select: { id: true, name: true } },
         _count: { select: { submissions: true } },
       },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { [oField]: oDir },
     });
 
     res.json(forms);

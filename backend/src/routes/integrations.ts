@@ -1,6 +1,7 @@
 import { Router, Response } from 'express';
 import { PrismaClient, IntegrationType, IntegrationStatus } from '@prisma/client';
 import { authMiddleware, AuthRequest } from '../middleware/auth';
+import { requireRole } from '../middleware/rbac';
 
 const router = Router();
 router.use(authMiddleware);
@@ -58,8 +59,8 @@ router.get('/:id', async (req: AuthRequest, res: Response) => {
   }
 });
 
-// Create integration
-router.post('/', async (req: AuthRequest, res: Response) => {
+// Create integration (ADMIN only)
+router.post('/', requireRole('ADMIN'), async (req: AuthRequest, res: Response) => {
   try {
     const prisma: PrismaClient = req.app.get('prisma');
     const { type, name, config } = req.body;
@@ -83,8 +84,8 @@ router.post('/', async (req: AuthRequest, res: Response) => {
   }
 });
 
-// Update integration
-router.put('/:id', async (req: AuthRequest, res: Response) => {
+// Update integration (ADMIN only)
+router.put('/:id', requireRole('ADMIN'), async (req: AuthRequest, res: Response) => {
   try {
     const prisma: PrismaClient = req.app.get('prisma');
     const { name, config, status } = req.body;
@@ -116,8 +117,8 @@ router.put('/:id', async (req: AuthRequest, res: Response) => {
   }
 });
 
-// Delete integration
-router.delete('/:id', async (req: AuthRequest, res: Response) => {
+// Delete integration (ADMIN only)
+router.delete('/:id', requireRole('ADMIN'), async (req: AuthRequest, res: Response) => {
   try {
     const prisma: PrismaClient = req.app.get('prisma');
     const result = await prisma.integration.deleteMany({

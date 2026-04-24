@@ -2,8 +2,11 @@ import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from './context/AuthContext';
 import Layout from './components/Layout';
+import ErrorBoundary from './components/ErrorBoundary';
 import Login from './pages/Login';
 import Register from './pages/Register';
+import ForgotPassword from './pages/ForgotPassword';
+import ResetPassword from './pages/ResetPassword';
 import Dashboard from './pages/Dashboard';
 import Campaigns from './pages/Campaigns';
 import CampaignDetail from './pages/CampaignDetail';
@@ -45,51 +48,57 @@ function PrivateRoute({ children }: { children: React.ReactNode }) {
 
 function App() {
   return (
-    <Routes>
-      <Route path="/login" element={<Login />} />
-      <Route path="/register" element={<Register />} />
-      <Route
-        path="/*"
-        element={
-          <PrivateRoute>
-            <Layout>
-              <Routes>
-                <Route path="/" element={<Dashboard />} />
-                <Route path="/campaigns" element={<Campaigns />} />
-                <Route path="/campaigns/new" element={<CampaignCreate />} />
-                <Route path="/campaigns/:id" element={<CampaignDetail />} />
-                <Route path="/campaigns/:id/edit" element={<CampaignCreate />} />
-                <Route path="/contacts" element={<Contacts />} />
-                <Route path="/contacts/new" element={<ContactCreate />} />
-                <Route path="/contacts/:id" element={<ContactDetail />} />
-                <Route path="/contacts/:id/edit" element={<ContactCreate />} />
-                <Route path="/segments" element={<Segments />} />
-                <Route path="/tags" element={<Tags />} />
-                <Route path="/custom-fields" element={<CustomFields />} />
-                <Route path="/templates" element={<Templates />} />
-                <Route path="/templates/new" element={<TemplateCreate />} />
-                <Route path="/templates/:id/edit" element={<TemplateCreate />} />
-                <Route path="/automations" element={<Automations />} />
-                <Route path="/automations/new" element={<AutomationCreate />} />
-                <Route path="/automations/:id/edit" element={<AutomationCreate />} />
-                <Route path="/landing-pages" element={<LandingPages />} />
-                <Route path="/landing-pages/new" element={<LandingPageCreate />} />
-                <Route path="/landing-pages/:id/edit" element={<LandingPageCreate />} />
-                <Route path="/forms" element={<Forms />} />
-                <Route path="/forms/new" element={<FormCreate />} />
-                <Route path="/forms/:id/edit" element={<FormCreate />} />
-                <Route path="/images" element={<ImageLibrary />} />
-                <Route path="/analytics" element={<Analytics />} />
-                <Route path="/reviews" element={<Reviews />} />
-                <Route path="/integrations" element={<Integrations />} />
-                <Route path="/ai-tools" element={<AITools />} />
-                <Route path="/settings" element={<Settings />} />
-              </Routes>
-            </Layout>
-          </PrivateRoute>
-        }
-      />
-    </Routes>
+    <ErrorBoundary>
+      <Routes>
+        <Route path="/login" element={<Login />} />
+        <Route path="/register" element={<Register />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
+        <Route
+          path="/*"
+          element={
+            <PrivateRoute>
+              <Layout>
+                <ErrorBoundary>
+                  <Routes>
+                    <Route path="/" element={<Dashboard />} />
+                    <Route path="/campaigns" element={<Campaigns />} />
+                    <Route path="/campaigns/new" element={<CampaignCreate />} />
+                    <Route path="/campaigns/:id" element={<CampaignDetail />} />
+                    <Route path="/campaigns/:id/edit" element={<CampaignCreate />} />
+                    <Route path="/contacts" element={<Contacts />} />
+                    <Route path="/contacts/new" element={<ContactCreate />} />
+                    <Route path="/contacts/:id" element={<ContactDetail />} />
+                    <Route path="/contacts/:id/edit" element={<ContactCreate />} />
+                    <Route path="/segments" element={<Segments />} />
+                    <Route path="/tags" element={<Tags />} />
+                    <Route path="/custom-fields" element={<CustomFields />} />
+                    <Route path="/templates" element={<Templates />} />
+                    <Route path="/templates/new" element={<TemplateCreate />} />
+                    <Route path="/templates/:id/edit" element={<TemplateCreate />} />
+                    <Route path="/automations" element={<Automations />} />
+                    <Route path="/automations/new" element={<AutomationCreate />} />
+                    <Route path="/automations/:id/edit" element={<AutomationCreate />} />
+                    <Route path="/landing-pages" element={<LandingPages />} />
+                    <Route path="/landing-pages/new" element={<LandingPageCreate />} />
+                    <Route path="/landing-pages/:id/edit" element={<LandingPageCreate />} />
+                    <Route path="/forms" element={<Forms />} />
+                    <Route path="/forms/new" element={<FormCreate />} />
+                    <Route path="/forms/:id/edit" element={<FormCreate />} />
+                    <Route path="/images" element={<ImageLibrary />} />
+                    <Route path="/analytics" element={<Analytics />} />
+                    <Route path="/reviews" element={<Reviews />} />
+                    <Route path="/integrations" element={<Integrations />} />
+                    <Route path="/ai-tools" element={<AITools />} />
+                    <Route path="/settings" element={<Settings />} />
+                  </Routes>
+                </ErrorBoundary>
+              </Layout>
+            </PrivateRoute>
+          }
+        />
+      </Routes>
+    </ErrorBoundary>
   );
 }
 

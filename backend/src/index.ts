@@ -3,6 +3,8 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import path from 'path';
 import { PrismaClient } from '@prisma/client';
+import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
 
 // Routes
 import authRoutes from './routes/auth';
@@ -22,12 +24,25 @@ import integrationRoutes from './routes/integrations';
 import aiRoutes from './routes/ai';
 import dashboardRoutes from './routes/dashboard';
 import optionsRoutes from './routes/options';
+import exportRoutes from './routes/export';
 
-dotenv.config();
+dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 
 const app = express();
 const prisma = new PrismaClient();
 const PORT = process.env.PORT || 3001;
+
+// Security headers
+app.use(helmet({ contentSecurityPolicy: false, crossOriginEmbedderPolicy: false }));
+
+// Rate limiting
+const globalLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 200, standardHeaders: true, legacyHeaders: false });
+const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 10, standardHeaders: true, legacyHeaders: false, message: { error: 'Too many attempts, please try again later' } });
+
+app.use('/api/', globalLimiter);
+app.use('/api/auth/login', authLimiter);
+app.use('/api/auth/register', authLimiter);
+app.use('/api/auth/forgot-password', authLimiter);
 
 // Middleware
 app.use(cors());
@@ -63,6 +78,7 @@ app.use('/api/integrations', integrationRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/options', optionsRoutes);
+app.use('/api/export', exportRoutes);
 
 // Error handling middleware
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
