@@ -31,6 +31,8 @@ import Reviews from './pages/Reviews';
 import Integrations from './pages/Integrations';
 import AITools from './pages/AITools';
 import Settings from './pages/Settings';
+import ABTestOrchestrator from './pages/ABTestOrchestrator';
+import EngineStatus from './pages/EngineStatus';
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isLoading } = useAuth();
@@ -90,6 +92,8 @@ function App() {
                     <Route path="/reviews" element={<Reviews />} />
                     <Route path="/integrations" element={<Integrations />} />
                     <Route path="/ai-tools" element={<AITools />} />
+                    <Route path="/ab-test" element={<ABTestOrchestrator />} />
+                    <Route path="/engine-status" element={<EngineStatus />} />
                     <Route path="/settings" element={<Settings />} />
                   </Routes>
                 </ErrorBoundary>

@@ -1,6 +1,7 @@
 import { Router, Response } from 'express';
 import { PrismaClient, CampaignType, CampaignStatus } from '@prisma/client';
 import { authMiddleware, AuthRequest } from '../middleware/auth';
+import { sendCampaignNow } from '../services/sendExecutor';
 
 const router = Router();
 router.use(authMiddleware);
@@ -9,7 +10,7 @@ router.use(authMiddleware);
 router.get('/', async (req: AuthRequest, res: Response) => {
   try {
     const prisma: PrismaClient = req.app.get('prisma');
-    const { type, status, search, sortBy, sortOrder } = req.query;
+    const { type, status, search, sortBy, sortOrder, page = '1', pageSize = '20' } = req.query;
 
     const where: any = { userId: req.userId };
     if (type) where.type = type;
@@ -25,17 +26,34 @@ router.get('/', async (req: AuthRequest, res: Response) => {
     const orderField = allowedSortFields.includes(sortBy as string) ? (sortBy as string) : 'createdAt';
     const orderDir = sortOrder === 'asc' ? 'asc' : 'desc';
 
-    const campaigns = await prisma.campaign.findMany({
-      where,
-      include: {
-        template: { select: { id: true, name: true } },
-        segment: { select: { id: true, name: true } },
-        _count: { select: { recipients: true } },
-      },
-      orderBy: { [orderField]: orderDir },
-    });
+    const pageNum = Math.max(1, parseInt(page as string) || 1);
+    const pageSizeNum = Math.min(100, Math.max(1, parseInt(pageSize as string) || 20));
+    const skip = (pageNum - 1) * pageSizeNum;
 
-    res.json(campaigns);
+    const [campaigns, total] = await Promise.all([
+      prisma.campaign.findMany({
+        where,
+        include: {
+          template: { select: { id: true, name: true } },
+          segment: { select: { id: true, name: true } },
+          _count: { select: { recipients: true } },
+        },
+        orderBy: { [orderField]: orderDir },
+        skip,
+        take: pageSizeNum,
+      }),
+      prisma.campaign.count({ where }),
+    ]);
+
+    res.json({
+      data: campaigns,
+      pagination: {
+        page: pageNum,
+        pageSize: pageSizeNum,
+        total,
+        totalPages: Math.ceil(total / pageSizeNum),
+      },
+    });
   } catch (error) {
     console.error('Get campaigns error:', error);
     res.status(500).json({ error: 'Failed to get campaigns' });
@@ -160,65 +178,16 @@ router.delete('/:id', async (req: AuthRequest, res: Response) => {
   }
 });
 
-// Send campaign
+// Send campaign — now uses real send executor (or simulation if SMTP/Twilio unset)
 router.post('/:id/send', async (req: AuthRequest, res: Response) => {
   try {
     const prisma: PrismaClient = req.app.get('prisma');
-
-    const campaign = await prisma.campaign.findFirst({
-      where: { id: req.params.id, userId: req.userId },
-      include: {
-        segment: { include: { contacts: { include: { contact: true } } } },
-      },
-    });
-
-    if (!campaign) {
-      return res.status(404).json({ error: 'Campaign not found' });
-    }
-
-    // Get contacts from segment or all contacts
-    let contacts;
-    if (campaign.segment) {
-      contacts = campaign.segment.contacts.map(cs => cs.contact);
-    } else {
-      contacts = await prisma.contact.findMany({
-        where: { userId: req.userId, status: 'ACTIVE' },
-      });
-    }
-
-    // Create recipients
-    const recipients = await Promise.all(
-      contacts.map(contact =>
-        prisma.campaignRecipient.create({
-          data: {
-            campaignId: campaign.id,
-            contactId: contact.id,
-            status: 'SENT',
-            sentAt: new Date(),
-          },
-        })
-      )
-    );
-
-    // Update campaign status
-    await prisma.campaign.update({
-      where: { id: campaign.id },
-      data: { status: 'SENT', sentAt: new Date() },
-    });
-
-    // Create initial analytics
-    await prisma.campaignAnalytics.create({
-      data: {
-        campaignId: campaign.id,
-        totalSent: recipients.length,
-        delivered: recipients.length,
-      },
-    });
-
-    res.json({ message: 'Campaign sent', recipientCount: recipients.length });
-  } catch (error) {
+    const result = await sendCampaignNow(prisma, req.params.id, req.userId!);
+    res.json({ message: 'Campaign dispatched', ...result });
+  } catch (error: any) {
     console.error('Send campaign error:', error);
-    res.status(500).json({ error: 'Failed to send campaign' });
+    if (error?.message === 'Campaign not found') return res.status(404).json({ error: error.message });
+    res.status(500).json({ error: error.message || 'Failed to send campaign' });
   }
 });
 

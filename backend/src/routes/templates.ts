@@ -32,15 +32,28 @@ router.get('/', async (req: AuthRequest, res: Response) => {
     const oField = allowedSort.includes(sortBy as string) ? (sortBy as string) : 'createdAt';
     const oDir = sortOrder === 'asc' ? 'asc' : 'desc';
 
-    const templates = await prisma.template.findMany({
-      where,
-      include: {
-        _count: { select: { campaigns: true } },
-      },
-      orderBy: { [oField]: oDir },
-    });
+    const { page = '1', pageSize = '20' } = req.query;
+    const pageNum = Math.max(1, parseInt(page as string) || 1);
+    const pageSizeNum = Math.min(100, Math.max(1, parseInt(pageSize as string) || 20));
+    const skip = (pageNum - 1) * pageSizeNum;
 
-    res.json(templates);
+    const [templates, total] = await Promise.all([
+      prisma.template.findMany({
+        where,
+        include: {
+          _count: { select: { campaigns: true } },
+        },
+        orderBy: { [oField]: oDir },
+        skip,
+        take: pageSizeNum,
+      }),
+      prisma.template.count({ where }),
+    ]);
+
+    res.json({
+      data: templates,
+      pagination: { page: pageNum, pageSize: pageSizeNum, total, totalPages: Math.ceil(total / pageSizeNum) },
+    });
   } catch (error) {
     console.error('Get templates error:', error);
     res.status(500).json({ error: 'Failed to get templates' });

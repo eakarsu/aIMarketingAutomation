@@ -2504,6 +2504,180 @@ router.delete('/email-campaigns/:id', async (req: AuthRequest, res: Response) =>
   }
 });
 
+// ============= SSE STREAMING: AI EMAIL CAMPAIGN GENERATOR =============
+// GET /api/ai/email-campaigns/stream?campaignType=...&industry=...&audience=...&tone=...&productName=...&goal=...&keyMessages=...
+// Streams AI-generated campaign content as Server-Sent Events so the client can render progressively.
+router.get('/email-campaigns/stream', async (req: AuthRequest, res: Response) => {
+  const { campaignType, industry, audience, tone, productName, goal, keyMessages } = req.query as Record<string, string>;
+
+  // SSE headers
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no'); // disable nginx buffering
+  res.flushHeaders();
+
+  const send = (event: string, data: unknown) => {
+    res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+  };
+
+  const apiKey = process.env.OPENROUTER_API_KEY;
+  const model = process.env.OPENROUTER_MODEL || 'anthropic/claude-haiku-4.5';
+
+  if (!apiKey || apiKey.includes('your-')) {
+    // Fall back to demo content streamed in chunks
+    send('status', { message: 'Generating demo campaign (no API key configured)...' });
+    await new Promise(r => setTimeout(r, 400));
+    send('status', { message: 'Building sections...' });
+    await new Promise(r => setTimeout(r, 400));
+    const demo = getDefaultEmailCampaign(campaignType, industry, audience);
+    send('result', demo);
+    send('done', { saved: false });
+    res.end();
+    return;
+  }
+
+  try {
+    send('status', { message: 'Connecting to AI...' });
+
+    const systemPrompt = `You are a world-class email marketing strategist. Create a complete email campaign.
+Return ONLY this exact JSON:
+{
+  "name": "Campaign Name",
+  "subject": "Subject line (30-50 chars)",
+  "previewText": "Preview text (40-90 chars)",
+  "sections": [
+    {"type":"header","heading":"Main headline","subheading":"Supporting text"},
+    {"type":"body","heading":"Section heading","content":"Body copy"},
+    {"type":"feature","heading":"Features","items":["Benefit 1","Benefit 2","Benefit 3"]},
+    {"type":"testimonial","quote":"Quote","author":"Name","role":"Title, Company"},
+    {"type":"cta","heading":"CTA heading","buttonText":"CTA text","urgency":"Urgency text"}
+  ],
+  "ctaText": "Primary CTA",
+  "ctaColor": "#4F46E5",
+  "estimatedOpenRate": 28.5,
+  "estimatedClickRate": 4.2,
+  "abVariants": [
+    {"subject":"Variant A","angle":"Curiosity"},
+    {"subject":"Variant B","angle":"Benefit"},
+    {"subject":"Variant C","angle":"Urgency"}
+  ],
+  "sendTimeRec": "Tuesday 10:00 AM EST",
+  "tips": ["Tip 1","Tip 2","Tip 3","Tip 4","Tip 5"]
+}`;
+
+    const userPrompt = `Create email campaign: Type=${campaignType || 'promotional'}, Industry=${industry || 'General'}, Audience=${audience || 'General'}, Tone=${tone || 'professional'}, Product=${productName || 'Not specified'}, Goal=${goal || 'Drive engagement'}, Messages=${keyMessages || 'Not specified'}`;
+
+    // Use fetch with streaming
+    const fetchResponse = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+        'HTTP-Referer': 'http://localhost:4000',
+        'X-Title': 'AI Marketing Automation',
+      },
+      body: JSON.stringify({
+        model,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt },
+        ],
+        max_tokens: 4096,
+        stream: true,
+      }),
+    });
+
+    if (!fetchResponse.ok || !fetchResponse.body) {
+      throw new Error('OpenRouter stream request failed');
+    }
+
+    send('status', { message: 'Receiving AI response...' });
+
+    let accumulated = '';
+    const reader = fetchResponse.body.getReader();
+    const decoder = new TextDecoder();
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      const chunk = decoder.decode(value, { stream: true });
+      const lines = chunk.split('\n').filter(l => l.startsWith('data: '));
+
+      for (const line of lines) {
+        const jsonStr = line.slice(6).trim();
+        if (jsonStr === '[DONE]') continue;
+        try {
+          const parsed = JSON.parse(jsonStr);
+          const delta = parsed.choices?.[0]?.delta?.content || '';
+          if (delta) {
+            accumulated += delta;
+            // Stream each chunk to client
+            send('chunk', { text: delta });
+          }
+        } catch {
+          // skip malformed SSE lines
+        }
+      }
+    }
+
+    send('status', { message: 'Parsing result...' });
+
+    // Strip markdown fences
+    let cleaned = accumulated.trim();
+    if (cleaned.startsWith('```')) {
+      cleaned = cleaned.replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, '');
+    }
+
+    let result: any;
+    try {
+      result = repairJSON(cleaned);
+    } catch {
+      result = getDefaultEmailCampaign(campaignType, industry, audience);
+    }
+
+    // Persist to DB
+    try {
+      const prisma: PrismaClient = req.app.get('prisma');
+      const saved = await prisma.aIEmailCampaign.create({
+        data: {
+          userId: req.userId!,
+          name: result.name || 'Email Campaign',
+          campaignType: campaignType || 'promotional',
+          subject: result.subject || 'Your Email Subject',
+          previewText: result.previewText || '',
+          body: JSON.stringify(result.sections || []),
+          sections: JSON.stringify(result.sections || []),
+          ctaText: result.ctaText || 'Learn More',
+          tone: tone || 'professional',
+          industry: industry || '',
+          audience: audience || '',
+          estimatedOpenRate: result.estimatedOpenRate || 0,
+          estimatedClickRate: result.estimatedClickRate || 0,
+          abVariants: JSON.stringify(result.abVariants || []),
+          sendTimeRec: result.sendTimeRec || '',
+          tips: JSON.stringify(result.tips || []),
+        },
+      });
+      send('result', { ...result, savedId: saved.id });
+      send('done', { saved: true, id: saved.id });
+    } catch (dbErr) {
+      console.error('[SSE] DB save failed:', dbErr);
+      send('result', result);
+      send('done', { saved: false });
+    }
+  } catch (err) {
+    console.error('[SSE] Streaming error:', err);
+    send('error', { message: 'Generation failed, returning demo content' });
+    const demo = getDefaultEmailCampaign(campaignType, industry, audience);
+    send('result', demo);
+    send('done', { saved: false });
+  }
+
+  res.end();
+});
+
 // Helper functions
 function generateDemoContent(type: string, prompt: string): string {
   const templates: Record<string, string> = {

@@ -40,6 +40,8 @@ const navigation = [
   { name: 'Reviews', href: '/reviews', icon: StarIcon },
   { name: 'Integrations', href: '/integrations', icon: PuzzlePieceIcon, adminOnly: true },
   { name: 'AI Tools', href: '/ai-tools', icon: SparklesIcon },
+  { name: 'A/B Test Orchestrator', href: '/ab-test', icon: SparklesIcon },
+  { name: 'Engine Status', href: '/engine-status', icon: CogIcon },
 ] as const;
 
 function classNames(...classes: string[]) {

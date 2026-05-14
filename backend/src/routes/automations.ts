@@ -19,16 +19,29 @@ router.get('/', async (req: AuthRequest, res: Response) => {
     const oField = allowedSort.includes(sortBy as string) ? (sortBy as string) : 'createdAt';
     const oDir = sortOrder === 'asc' ? 'asc' : 'desc';
 
-    const automations = await prisma.automation.findMany({
-      where,
-      include: {
-        segment: { select: { id: true, name: true } },
-        _count: { select: { steps: true, enrollments: true } },
-      },
-      orderBy: { [oField]: oDir },
-    });
+    const { page = '1', pageSize = '20' } = req.query;
+    const pageNum = Math.max(1, parseInt(page as string) || 1);
+    const pageSizeNum = Math.min(100, Math.max(1, parseInt(pageSize as string) || 20));
+    const skip = (pageNum - 1) * pageSizeNum;
 
-    res.json(automations);
+    const [automations, total] = await Promise.all([
+      prisma.automation.findMany({
+        where,
+        include: {
+          segment: { select: { id: true, name: true } },
+          _count: { select: { steps: true, enrollments: true } },
+        },
+        orderBy: { [oField]: oDir },
+        skip,
+        take: pageSizeNum,
+      }),
+      prisma.automation.count({ where }),
+    ]);
+
+    res.json({
+      data: automations,
+      pagination: { page: pageNum, pageSize: pageSizeNum, total, totalPages: Math.ceil(total / pageSizeNum) },
+    });
   } catch (error) {
     console.error('Get automations error:', error);
     res.status(500).json({ error: 'Failed to get automations' });

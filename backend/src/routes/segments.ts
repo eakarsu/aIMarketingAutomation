@@ -9,15 +9,29 @@ router.use(authMiddleware);
 router.get('/', async (req: AuthRequest, res: Response) => {
   try {
     const prisma: PrismaClient = req.app.get('prisma');
-    const segments = await prisma.segment.findMany({
-      where: { userId: req.userId },
-      include: {
-        _count: { select: { contacts: true, campaigns: true } },
-      },
-      orderBy: { createdAt: 'desc' },
-    });
+    const { page = '1', pageSize = '20' } = req.query;
+    const pageNum = Math.max(1, parseInt(page as string) || 1);
+    const pageSizeNum = Math.min(100, Math.max(1, parseInt(pageSize as string) || 20));
+    const skip = (pageNum - 1) * pageSizeNum;
 
-    res.json(segments);
+    const where = { userId: req.userId };
+    const [segments, total] = await Promise.all([
+      prisma.segment.findMany({
+        where,
+        include: {
+          _count: { select: { contacts: true, campaigns: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: pageSizeNum,
+      }),
+      prisma.segment.count({ where }),
+    ]);
+
+    res.json({
+      data: segments,
+      pagination: { page: pageNum, pageSize: pageSizeNum, total, totalPages: Math.ceil(total / pageSizeNum) },
+    });
   } catch (error) {
     console.error('Get segments error:', error);
     res.status(500).json({ error: 'Failed to get segments' });
