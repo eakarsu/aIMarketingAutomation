@@ -10,6 +10,7 @@ import { dispatchScheduledCampaigns } from './services/sendExecutor';
 import { runAutomationEngine } from './services/automationEngine';
 import inboundWebhookRoutes from './routes/inboundWebhooks';
 import abTestRoutes from './routes/abTestOrchestrator';
+import customViewsRoutes from './routes/customViews';
 
 // Routes
 import authRoutes from './routes/auth';
@@ -113,6 +114,7 @@ app.use('/api/export', exportRoutes);
 app.use('/api/webhooks', webhookRoutes);
 app.use('/api/inbound-webhooks', inboundWebhookRoutes); // PUBLIC — no auth (provider callbacks)
 app.use('/api/ab-test', abTestRoutes);
+app.use('/api/custom-views', customViewsRoutes);
 
 // Error handling middleware
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {

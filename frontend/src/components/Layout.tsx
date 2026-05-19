@@ -42,6 +42,7 @@ const navigation = [
   { name: 'AI Tools', href: '/ai-tools', icon: SparklesIcon },
   { name: 'A/B Test Orchestrator', href: '/ab-test', icon: SparklesIcon },
   { name: 'Engine Status', href: '/engine-status', icon: CogIcon },
+  { name: 'Automation Views', href: '/custom-views', icon: ChartBarIcon },
 ] as const;
 
 function classNames(...classes: string[]) {
