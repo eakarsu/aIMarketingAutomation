@@ -351,4 +351,18 @@ export const optionsAPI = {
   getRatings: () => api.get('/options/ratings'),
 };
 
+// AI A/B Test Orchestrator
+export const abTestAPI = {
+  proposeVariants: (campaignId: string) => api.post(`/ab-test/${campaignId}/propose-variants`),
+  runPilot: (campaignId: string) => api.post(`/ab-test/${campaignId}/run-pilot`),
+  finalize: (campaignId: string) => api.post(`/ab-test/${campaignId}/finalize`),
+  status: (campaignId: string) => api.get(`/ab-test/${campaignId}/status`),
+};
+
+// Admin / runtime triggers
+export const adminAPI = {
+  runSendExecutor: () => api.post('/admin/run-send-executor'),
+  runAutomationEngine: () => api.post('/admin/run-automation-engine'),
+};
+
 export default api;

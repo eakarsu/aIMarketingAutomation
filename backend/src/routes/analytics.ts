@@ -1,6 +1,7 @@
 import { Router, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { authMiddleware, AuthRequest } from '../middleware/auth';
+import { dispatchCampaignPerformance } from '../services/webhookService';
 
 const router = Router();
 router.use(authMiddleware);
@@ -39,7 +40,7 @@ router.get('/campaigns/:id', async (req: AuthRequest, res: Response) => {
       unsubscribeRate: stats.delivered > 0 ? (stats.unsubscribed / stats.delivered * 100).toFixed(2) : 0,
     };
 
-    res.json({
+    const responseBody = {
       campaign: {
         id: campaign.id,
         name: campaign.name,
@@ -50,7 +51,20 @@ router.get('/campaigns/:id', async (req: AuthRequest, res: Response) => {
       stats,
       rates,
       history: campaign.analytics,
-    });
+    };
+
+    res.json(responseBody);
+
+    // Fire campaign.performance webhook asynchronously (non-blocking)
+    dispatchCampaignPerformance(req.userId!, {
+      campaignId: campaign.id,
+      campaignName: campaign.name,
+      metrics: {
+        ...stats,
+        openRate: String(rates.openRate),
+        clickRate: String(rates.clickRate),
+      },
+    }).catch(err => console.error('[webhook dispatch] campaign analytics:', err));
   } catch (error) {
     console.error('Get campaign analytics error:', error);
     res.status(500).json({ error: 'Failed to get analytics' });
@@ -193,6 +207,108 @@ router.get('/ab-tests/:id', async (req: AuthRequest, res: Response) => {
   }
 });
 
+// Auto-detect A/B test winner using statistical significance (z-test on open rates)
+// Called automatically when analytics are updated; also available as explicit endpoint.
+router.post('/ab-tests/:id/auto-detect-winner', async (req: AuthRequest, res: Response) => {
+  try {
+    const prisma: PrismaClient = req.app.get('prisma');
+
+    const abTest = await prisma.aBTest.findFirst({
+      where: { id: req.params.id, userId: req.userId },
+      include: { variants: true },
+    });
+
+    if (!abTest) return res.status(404).json({ error: 'A/B Test not found' });
+    if (abTest.status !== 'RUNNING') {
+      return res.status(400).json({ error: 'A/B Test is not running', status: abTest.status });
+    }
+
+    // Require at least MIN_IMPRESSIONS per variant before declaring a winner
+    const MIN_IMPRESSIONS = 100;
+    const insufficientVariants = abTest.variants.filter(v => v.sent < MIN_IMPRESSIONS);
+    if (insufficientVariants.length > 0) {
+      return res.json({
+        conclusion: 'insufficient_data',
+        message: `Need at least ${MIN_IMPRESSIONS} impressions per variant. Insufficiently sampled: ${insufficientVariants.map(v => `${v.name} (${v.sent})`).join(', ')}`,
+        variants: abTest.variants.map(v => ({ id: v.id, name: v.name, sent: v.sent, opened: v.opened, openRate: v.sent > 0 ? (v.opened / v.sent) : 0 })),
+      });
+    }
+
+    // Compute open rates and z-score between top two variants
+    const ranked = [...abTest.variants].sort((a, b) => {
+      const rateA = a.sent > 0 ? a.opened / a.sent : 0;
+      const rateB = b.sent > 0 ? b.opened / b.sent : 0;
+      return rateB - rateA;
+    });
+
+    const best = ranked[0];
+    const second = ranked[1];
+    const p1 = best.sent > 0 ? best.opened / best.sent : 0;
+    const p2 = second && second.sent > 0 ? second.opened / second.sent : 0;
+
+    // Pooled z-test for proportions
+    let significant = false;
+    let confidence = 0;
+    let zScore = 0;
+    if (second && best.sent > 0 && second.sent > 0) {
+      const pPool = (best.opened + second.opened) / (best.sent + second.sent);
+      const se = Math.sqrt(pPool * (1 - pPool) * (1 / best.sent + 1 / second.sent));
+      zScore = se > 0 ? Math.abs(p1 - p2) / se : 0;
+      // Map z-score to approximate confidence (one-tailed)
+      // z=1.645 => 95%, z=1.282 => 90%, z=1.960 => 97.5%
+      if (zScore >= 1.960) { confidence = 97.5; significant = true; }
+      else if (zScore >= 1.645) { confidence = 95; significant = true; }
+      else if (zScore >= 1.282) { confidence = 90; significant = false; }
+      else { confidence = Math.min(89, Math.round(zScore / 1.282 * 90)); }
+    }
+
+    const variantStats = abTest.variants.map(v => ({
+      id: v.id,
+      name: v.name,
+      sent: v.sent,
+      opened: v.opened,
+      clicked: v.clicked,
+      openRate: v.sent > 0 ? parseFloat((v.opened / v.sent * 100).toFixed(2)) : 0,
+      clickRate: v.opened > 0 ? parseFloat((v.clicked / v.opened * 100).toFixed(2)) : 0,
+    }));
+
+    if (significant) {
+      // Auto-mark winner
+      await prisma.aBTest.update({
+        where: { id: abTest.id },
+        data: {
+          status: 'COMPLETED',
+          winnerVariant: best.name,
+          endedAt: new Date(),
+        },
+      });
+
+      return res.json({
+        conclusion: 'winner_detected',
+        winner: { id: best.id, name: best.name, openRate: parseFloat((p1 * 100).toFixed(2)) },
+        confidence,
+        zScore: parseFloat(zScore.toFixed(3)),
+        message: `Variant "${best.name}" is the statistically significant winner at ${confidence}% confidence.`,
+        variants: variantStats,
+        autoCompleted: true,
+      });
+    }
+
+    return res.json({
+      conclusion: 'no_winner_yet',
+      leader: { id: best.id, name: best.name, openRate: parseFloat((p1 * 100).toFixed(2)) },
+      confidence,
+      zScore: parseFloat(zScore.toFixed(3)),
+      message: `"${best.name}" leads but significance threshold not reached yet (${confidence}% confidence, need 95%).`,
+      variants: variantStats,
+      autoCompleted: false,
+    });
+  } catch (error) {
+    console.error('Auto-detect A/B winner error:', error);
+    res.status(500).json({ error: 'Failed to auto-detect winner' });
+  }
+});
+
 // Create A/B test
 router.post('/ab-tests', async (req: AuthRequest, res: Response) => {
   try {
@@ -279,7 +395,32 @@ router.post('/conversions', async (req: AuthRequest, res: Response) => {
       });
     }
 
+    // Fetch updated campaign metrics and fire webhook
+    const campaign = await prisma.campaign.findFirst({
+      where: { id: campaignId, userId: req.userId },
+      include: { recipients: true },
+    });
+
     res.json({ message: 'Conversion tracked' });
+
+    if (campaign) {
+      const totalSent = campaign.recipients.filter(r => r.status !== 'PENDING').length;
+      const delivered = campaign.recipients.filter(r => ['DELIVERED', 'OPENED', 'CLICKED'].includes(r.status)).length;
+      const opened = campaign.recipients.filter(r => r.openedAt || ['OPENED', 'CLICKED'].includes(r.status)).length;
+      const clicked = campaign.recipients.filter(r => r.clickedAt || r.status === 'CLICKED').length;
+      const bounced = campaign.recipients.filter(r => r.status === 'BOUNCED').length;
+      const unsubscribed = campaign.recipients.filter(r => r.status === 'UNSUBSCRIBED').length;
+
+      dispatchCampaignPerformance(req.userId!, {
+        campaignId: campaign.id,
+        campaignName: campaign.name,
+        metrics: {
+          totalSent, delivered, opened, clicked, bounced, unsubscribed,
+          openRate: delivered > 0 ? (opened / delivered * 100).toFixed(2) : '0',
+          clickRate: opened > 0 ? (clicked / opened * 100).toFixed(2) : '0',
+        },
+      }).catch(err => console.error('[webhook dispatch] conversion:', err));
+    }
   } catch (error) {
     console.error('Track conversion error:', error);
     res.status(500).json({ error: 'Failed to track conversion' });
