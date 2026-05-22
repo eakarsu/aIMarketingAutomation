@@ -54,13 +54,23 @@ else
   # Create database if it doesn't exist
   echo ""
   echo "==> Ensuring database '${DB_NAME}' exists..."
-  if ! psql -h localhost -lqt 2>/dev/null | cut -d \| -f 1 | grep -qw "${DB_NAME}" && \
-     ! psql -lqt 2>/dev/null | cut -d \| -f 1 | grep -qw "${DB_NAME}"; then
+  DB_EXISTS=0
+  set +o pipefail
+  if psql -h localhost -lqt 2>/dev/null | cut -d \| -f 1 | grep -qw "${DB_NAME}"; then DB_EXISTS=1; fi
+  if [ "${DB_EXISTS}" = "0" ] && psql -lqt 2>/dev/null | cut -d \| -f 1 | grep -qw "${DB_NAME}"; then DB_EXISTS=1; fi
+  set -o pipefail
+  if [ "${DB_EXISTS}" = "0" ]; then
     echo "Creating database '${DB_NAME}'..."
     createdb "${DB_NAME}" 2>/dev/null || createdb -h localhost "${DB_NAME}" 2>/dev/null || {
-      echo "Could not create database automatically."
-      echo "Please create it manually: createdb ${DB_NAME}"
-      exit 1
+      # Recheck — another process may have created it; or it already existed
+      if psql -lqt 2>/dev/null | cut -d \| -f 1 | grep -qw "${DB_NAME}" || \
+         psql -h localhost -lqt 2>/dev/null | cut -d \| -f 1 | grep -qw "${DB_NAME}"; then
+        echo "Database '${DB_NAME}' already exists (after retry)."
+      else
+        echo "Could not create database automatically."
+        echo "Please create it manually: createdb ${DB_NAME}"
+        exit 1
+      fi
     }
     echo "Database created successfully!"
   else

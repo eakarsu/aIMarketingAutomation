@@ -34,6 +34,10 @@ import Settings from './pages/Settings';
 import ABTestOrchestrator from './pages/ABTestOrchestrator';
 import EngineStatus from './pages/EngineStatus';
 import CustomViewsPage from './pages/CustomViewsPage';
+import ConsentFatigue from './pages/ConsentFatigue';
+
+import CodexCustomVizFeature from './pages/CodexCustomVizFeature';
+import CodexOperationsFeature from './pages/CodexOperationsFeature';
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isLoading } = useAuth();
@@ -53,6 +57,9 @@ function App() {
   return (
     <ErrorBoundary>
       <Routes>
+        <Route path="/codex/custom-viz" element={<CodexCustomVizFeature />} />
+        <Route path="/codex/operations" element={<CodexOperationsFeature />} />
+
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
@@ -96,6 +103,7 @@ function App() {
                     <Route path="/ab-test" element={<ABTestOrchestrator />} />
                     <Route path="/engine-status" element={<EngineStatus />} />
                     <Route path="/custom-views" element={<CustomViewsPage />} />
+                    <Route path="/consent-fatigue" element={<ConsentFatigue />} />
                     <Route path="/settings" element={<Settings />} />
                   </Routes>
                 </ErrorBoundary>

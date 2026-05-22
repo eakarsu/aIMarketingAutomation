@@ -32,6 +32,7 @@ import dashboardRoutes from './routes/dashboard';
 import optionsRoutes from './routes/options';
 import exportRoutes from './routes/export';
 import webhookRoutes from './routes/webhooks';
+import consentFatigueRoutes from './routes/consentFatigue';
 
 // === BATCH 05 AUTO-MOUNT imports ===
 import campaignOrchestratorAgentRouter from './routes/campaign-orchestrator-agent';
@@ -115,6 +116,7 @@ app.use('/api/webhooks', webhookRoutes);
 app.use('/api/inbound-webhooks', inboundWebhookRoutes); // PUBLIC — no auth (provider callbacks)
 app.use('/api/ab-test', abTestRoutes);
 app.use('/api/custom-views', customViewsRoutes);
+app.use('/api/consent-fatigue', consentFatigueRoutes);
 
 // Error handling middleware
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
