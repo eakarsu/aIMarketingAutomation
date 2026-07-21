@@ -154,8 +154,8 @@ export default function Campaigns() {
   const handleSend = async (id: string) => {
     if (!confirm('Are you sure you want to send this campaign now?')) return;
     try {
-      await campaignsAPI.send(id);
-      toast.success('Campaign sent successfully!');
+      const response = await campaignsAPI.send(id);
+      toast.success(`${response.data.queued} delivery job(s) queued; ${response.data.blocked} blocked`);
       fetchCampaigns();
     } catch (error) {
       toast.error('Failed to send campaign');

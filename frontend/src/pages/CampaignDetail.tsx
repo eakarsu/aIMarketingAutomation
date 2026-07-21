@@ -10,7 +10,7 @@ import {
   DocumentDuplicateIcon,
   PaperAirplaneIcon,
 } from '@heroicons/react/24/outline';
-import { campaignsAPI, analyticsAPI } from '../services/api';
+import { campaignsAPI, analyticsAPI, governanceAPI } from '../services/api';
 import toast from 'react-hot-toast';
 
 interface Campaign {
@@ -24,6 +24,11 @@ interface Campaign {
   scheduledAt?: string;
   sentAt?: string;
   createdAt: string;
+  approvalStatus: string;
+  aiGenerated?: boolean;
+  sensitiveSegment?: boolean;
+  outreachApproval?: { status: string; comment?: string };
+  deliveryJobs?: DeliveryJob[];
 }
 
 interface Analytics {
@@ -48,6 +53,18 @@ interface Recipient {
   sentAt?: string;
   openedAt?: string;
   clickedAt?: string;
+  contact?: { email: string; firstName?: string; lastName?: string };
+}
+
+interface DeliveryJob {
+  id: string;
+  status: string;
+  channel: string;
+  attempt: number;
+  provider?: string;
+  sentAt?: string;
+  error?: { code?: string; message?: string };
+  policyDecision?: { reasons?: string[] };
 }
 
 export default function CampaignDetail() {
@@ -59,6 +76,7 @@ export default function CampaignDetail() {
   const [loading, setLoading] = useState(true);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isSending, setIsSending] = useState(false);
+  const [isRequestingApproval, setIsRequestingApproval] = useState(false);
 
   useEffect(() => {
     if (id) {
@@ -70,7 +88,7 @@ export default function CampaignDetail() {
   const fetchCampaign = async () => {
     try {
       const response = await campaignsAPI.getOne(id!);
-      setCampaign(response.data.campaign);
+      setCampaign(response.data);
       setRecipients(response.data.recipients || []);
     } catch (error: any) {
       toast.error(error.response?.data?.error || 'Failed to load campaign');
@@ -94,14 +112,27 @@ export default function CampaignDetail() {
 
     setIsSending(true);
     try {
-      await campaignsAPI.send(id!);
-      toast.success('Campaign sent successfully');
+      const response = await campaignsAPI.send(id!);
+      toast.success(`${response.data.queued} delivery job(s) queued; ${response.data.blocked} blocked by policy`);
       fetchCampaign();
       fetchAnalytics();
     } catch (error: any) {
       toast.error(error.response?.data?.error || 'Failed to send campaign');
     } finally {
       setIsSending(false);
+    }
+  };
+
+  const handleApprovalRequest = async () => {
+    setIsRequestingApproval(true);
+    try {
+      await governanceAPI.requestApproval(id!, { audienceReviewed: true });
+      toast.success('Approval request recorded');
+      await fetchCampaign();
+    } catch (error: any) {
+      toast.error(error.response?.data?.error || 'Could not request approval');
+    } finally {
+      setIsRequestingApproval(false);
     }
   };
 
@@ -169,6 +200,11 @@ export default function CampaignDetail() {
             </p>
           </div>
           <div className="flex gap-2">
+            {['NOT_REQUIRED', 'REJECTED'].includes(campaign.approvalStatus) && (campaign.aiGenerated || campaign.sensitiveSegment) && (
+              <button onClick={handleApprovalRequest} disabled={isRequestingApproval} className="inline-flex items-center px-4 py-2 border border-amber-300 shadow-sm text-sm font-medium rounded-md text-amber-800 bg-amber-50 hover:bg-amber-100 disabled:opacity-50">
+                {isRequestingApproval ? 'Requesting...' : 'Request approval'}
+              </button>
+            )}
             {campaign.status === 'DRAFT' && (
               <button
                 onClick={handleSend}
@@ -240,7 +276,30 @@ export default function CampaignDetail() {
                 {new Date(campaign.createdAt).toLocaleString()}
               </dd>
             </div>
+            <div>
+              <dt className="text-sm font-medium text-gray-500">Human review</dt>
+              <dd className="mt-1 text-sm text-gray-900">{campaign.approvalStatus || 'NOT_REQUIRED'}</dd>
+            </div>
           </dl>
+        </div>
+      </div>
+
+      <div className="bg-white shadow rounded-lg mb-8">
+        <div className="px-4 py-5 sm:p-6">
+          <h3 className="text-lg font-medium text-gray-900 mb-2">Delivery operations</h3>
+          <p className="text-sm text-gray-500 mb-4">Provider acceptance is shown as SENT. DELIVERED appears only after a verified provider callback.</p>
+          {(campaign.deliveryJobs || []).length === 0 ? (
+            <p className="text-sm text-gray-500">No delivery jobs have been queued.</p>
+          ) : (
+            <div className="space-y-2">
+              {(campaign.deliveryJobs || []).slice(0, 20).map((job) => (
+                <div key={job.id} className="flex items-center justify-between rounded border border-gray-200 p-3 text-sm">
+                  <div><span className="font-medium">{job.channel}</span><span className="ml-2 text-gray-500">attempt {job.attempt}</span>{job.error?.message && <p className="text-red-700">{job.error.code}: {job.error.message}</p>}</div>
+                  <span className="rounded bg-gray-100 px-2 py-1 font-medium">{job.status}</span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
@@ -327,9 +386,9 @@ export default function CampaignDetail() {
                         <div className="flex items-center">
                           <div>
                             <div className="text-sm font-medium text-gray-900">
-                              {recipient.firstName} {recipient.lastName}
+                              {recipient.contact?.firstName || recipient.firstName} {recipient.contact?.lastName || recipient.lastName}
                             </div>
-                            <div className="text-sm text-gray-500">{recipient.email}</div>
+                            <div className="text-sm text-gray-500">{recipient.contact?.email || recipient.email}</div>
                           </div>
                         </div>
                       </td>

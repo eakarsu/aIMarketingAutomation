@@ -68,6 +68,14 @@ export const campaignsAPI = {
   bulkUpdate: (ids: string[], updates: any) => api.put('/campaigns/bulk-update', { ids, updates }),
 };
 
+export const governanceAPI = {
+  requestApproval: (campaignId: string, attestations: Record<string, boolean>) => api.post(`/governance/campaigns/${campaignId}/approval-request`, { attestations }),
+  decideApproval: (campaignId: string, decision: 'APPROVED' | 'REJECTED', attestations: Record<string, boolean>, comment?: string) => api.post(`/governance/campaigns/${campaignId}/approval-decision`, { decision, attestations, comment }),
+  getDeliveryJobs: (campaignId: string) => api.get(`/governance/campaigns/${campaignId}/delivery-jobs`),
+  cancelDelivery: (jobId: string) => api.post(`/governance/delivery-jobs/${jobId}/cancel`),
+  getDataQuality: () => api.get('/governance/data-quality'),
+};
+
 // Contacts
 export const contactsAPI = {
   getAll: (params?: any) => api.get('/contacts', { params }),

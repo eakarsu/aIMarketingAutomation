@@ -1,5 +1,4 @@
-import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useEffect, useState } from 'react';
 import api, { abTestAPI } from '../services/api';
 
 /**
@@ -7,7 +6,6 @@ import api, { abTestAPI } from '../services/api';
  * Workflow: select a campaign → propose AI variants → run pilot to 10% → finalize with winner.
  */
 export default function ABTestOrchestrator() {
-  const navigate = useNavigate();
   const [campaigns, setCampaigns] = useState<any[]>([]);
   const [selected, setSelected] = useState<string>('');
   const [abTest, setAbTest] = useState<any>(null);

@@ -2,6 +2,7 @@ import { Router, Response } from 'express';
 import { PrismaClient, IntegrationType, IntegrationStatus } from '@prisma/client';
 import { authMiddleware, AuthRequest } from '../middleware/auth';
 import { requireRole } from '../middleware/rbac';
+import { encryptConnectorConfig } from '../security/connectorCrypto';
 
 const router = Router();
 router.use(authMiddleware);
@@ -70,7 +71,7 @@ router.post('/', requireRole('ADMIN'), async (req: AuthRequest, res: Response) =
         userId: req.userId!,
         type: type as IntegrationType,
         name,
-        config: JSON.stringify(config),
+        config: encryptConnectorConfig(config),
       },
     });
 
@@ -99,7 +100,7 @@ router.put('/:id', requireRole('ADMIN'), async (req: AuthRequest, res: Response)
     }
 
     const updateData: any = { name };
-    if (config) updateData.config = JSON.stringify(config);
+    if (config) updateData.config = encryptConnectorConfig(config);
     if (status) updateData.status = status as IntegrationStatus;
 
     const integration = await prisma.integration.update({
@@ -136,65 +137,15 @@ router.delete('/:id', requireRole('ADMIN'), async (req: AuthRequest, res: Respon
   }
 });
 
-// Test integration
+// Legacy provider integrations remain delivery credentials only. Customer-data
+// connectivity uses /api/source-connections so verification has a real contract.
 router.post('/:id/test', async (req: AuthRequest, res: Response) => {
-  try {
-    const prisma: PrismaClient = req.app.get('prisma');
-
-    const integration = await prisma.integration.findFirst({
-      where: { id: req.params.id, userId: req.userId },
-    });
-
-    if (!integration) {
-      return res.status(404).json({ error: 'Integration not found' });
-    }
-
-    // Simulate testing the integration
-    // In production, this would actually test the connection
-    const testResults = {
-      success: true,
-      message: 'Connection successful',
-      testedAt: new Date(),
-    };
-
-    // Update last sync time
-    await prisma.integration.update({
-      where: { id: req.params.id },
-      data: { lastSyncAt: new Date() },
-    });
-
-    res.json(testResults);
-  } catch (error) {
-    console.error('Test integration error:', error);
-    res.status(500).json({ error: 'Failed to test integration' });
-  }
+  res.status(410).json({ error: 'Legacy integration simulation retired', use: '/api/source-connections/:id/verify' });
 });
 
 // Sync integration
 router.post('/:id/sync', async (req: AuthRequest, res: Response) => {
-  try {
-    const prisma: PrismaClient = req.app.get('prisma');
-
-    const integration = await prisma.integration.findFirst({
-      where: { id: req.params.id, userId: req.userId },
-    });
-
-    if (!integration) {
-      return res.status(404).json({ error: 'Integration not found' });
-    }
-
-    // Simulate syncing
-    // In production, this would actually sync data
-    await prisma.integration.update({
-      where: { id: req.params.id },
-      data: { lastSyncAt: new Date() },
-    });
-
-    res.json({ message: 'Sync completed', syncedAt: new Date() });
-  } catch (error) {
-    console.error('Sync integration error:', error);
-    res.status(500).json({ error: 'Failed to sync integration' });
-  }
+  res.status(410).json({ error: 'Legacy timestamp-only sync retired', use: '/api/source-connections/:id/sync-runs' });
 });
 
 // Activate integration

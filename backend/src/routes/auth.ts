@@ -3,8 +3,9 @@ import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { body, validationResult } from 'express-validator';
-import { authMiddleware, AuthRequest } from '../middleware/auth';
-import { v4 as uuidv4 } from 'uuid';
+import { authMiddleware, AuthRequest, getJwtSecret } from '../middleware/auth';
+import { createHash, randomBytes } from 'node:crypto';
+import { sendPasswordResetEmail, sendVerificationEmail } from '../services/transactionalEmail';
 
 const router = Router();
 
@@ -57,7 +58,7 @@ router.post('/register', [
       },
     });
 
-    const token = jwt.sign({ userId: user.id }, process.env.JWT_SECRET!, { expiresIn: '7d' });
+    const token = jwt.sign({ userId: user.id }, getJwtSecret(), { expiresIn: '24h', algorithm: 'HS256' });
 
     res.status(201).json({
       user: {
@@ -76,7 +77,7 @@ router.post('/register', [
   }
 });
 
-// Login — does NOT enforce password strength (demo123 still works)
+// Existing accounts are authenticated against their stored password hash.
 router.post('/login', [
   body('email').isEmail().normalizeEmail(),
   body('password').notEmpty(),
@@ -100,7 +101,7 @@ router.post('/login', [
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
-    const token = jwt.sign({ userId: user.id }, process.env.JWT_SECRET!, { expiresIn: '7d' });
+    const token = jwt.sign({ userId: user.id }, getJwtSecret(), { expiresIn: '24h', algorithm: 'HS256' });
 
     res.json({
       user: {
@@ -240,17 +241,22 @@ router.post('/forgot-password', async (req: Request, res: Response) => {
       return res.json({ message: 'If an account exists, a reset link has been sent' });
     }
 
-    const token = uuidv4();
+    const token = randomBytes(32).toString('base64url');
+    const tokenDigest = createHash('sha256').update(token).digest('hex');
     await prisma.passwordReset.create({
       data: {
         userId: user.id,
-        token,
+        token: tokenDigest,
         expiresAt: new Date(Date.now() + 60 * 60 * 1000), // 1 hour
       },
     });
-
-    // In demo mode, return the token directly
-    res.json({ message: 'If an account exists, a reset link has been sent', token });
+    try {
+      await sendPasswordResetEmail(user.email, token);
+    } catch (emailError) {
+      await prisma.passwordReset.deleteMany({ where: { token: tokenDigest } });
+      console.error('Password reset email delivery failed:', emailError);
+    }
+    res.json({ message: 'If an account exists, a reset link has been sent' });
   } catch (error) {
     console.error('Forgot password error:', error);
     res.status(500).json({ error: 'Failed to process request' });
@@ -263,7 +269,8 @@ router.post('/reset-password', async (req: Request, res: Response) => {
     const prisma: PrismaClient = req.app.get('prisma');
     const { token, password } = req.body;
 
-    const reset = await prisma.passwordReset.findUnique({ where: { token } });
+    const tokenDigest = createHash('sha256').update(String(token || '')).digest('hex');
+    const reset = await prisma.passwordReset.findUnique({ where: { token: tokenDigest } });
     if (!reset || reset.used || reset.expiresAt < new Date()) {
       return res.status(400).json({ error: 'Invalid or expired reset token' });
     }
@@ -295,15 +302,17 @@ router.post('/reset-password', async (req: Request, res: Response) => {
 router.post('/send-verification', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const prisma: PrismaClient = req.app.get('prisma');
-    const token = uuidv4();
+    const user = await prisma.user.findUnique({ where: { id: req.userId } });
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    const token = randomBytes(32).toString('base64url');
+    const tokenDigest = createHash('sha256').update(token).digest('hex');
 
     await prisma.user.update({
       where: { id: req.userId },
-      data: { verificationToken: token },
+      data: { verificationToken: tokenDigest },
     });
-
-    // In demo mode, return the token
-    res.json({ message: 'Verification email sent', token });
+    await sendVerificationEmail(user.email, token);
+    res.json({ message: 'Verification email sent' });
   } catch (error) {
     console.error('Send verification error:', error);
     res.status(500).json({ error: 'Failed to send verification' });
@@ -316,7 +325,8 @@ router.post('/verify-email', async (req: Request, res: Response) => {
     const prisma: PrismaClient = req.app.get('prisma');
     const { token } = req.body;
 
-    const user = await prisma.user.findUnique({ where: { verificationToken: token } });
+    const tokenDigest = createHash('sha256').update(String(token || '')).digest('hex');
+    const user = await prisma.user.findUnique({ where: { verificationToken: tokenDigest } });
     if (!user) {
       return res.status(400).json({ error: 'Invalid verification token' });
     }

@@ -72,6 +72,8 @@ router.get('/:id', async (req: AuthRequest, res: Response) => {
         recipients: { include: { contact: true } },
         analytics: { orderBy: { recordedAt: 'desc' }, take: 1 },
         abTests: { include: { variants: true } },
+        outreachApproval: true,
+        deliveryJobs: { include: { attempts: { orderBy: { attempt: 'desc' }, take: 1 } }, orderBy: { createdAt: 'desc' }, take: 500 },
       },
     });
 
@@ -178,12 +180,12 @@ router.delete('/:id', async (req: AuthRequest, res: Response) => {
   }
 });
 
-// Send campaign — now uses real send executor (or simulation if SMTP/Twilio unset)
+// Sending creates durable, policy-evaluated work; the delivery worker performs provider I/O.
 router.post('/:id/send', async (req: AuthRequest, res: Response) => {
   try {
     const prisma: PrismaClient = req.app.get('prisma');
     const result = await sendCampaignNow(prisma, req.params.id, req.userId!);
-    res.json({ message: 'Campaign dispatched', ...result });
+    res.status(202).json({ message: 'Campaign evaluated and queued', ...result });
   } catch (error: any) {
     console.error('Send campaign error:', error);
     if (error?.message === 'Campaign not found') return res.status(404).json({ error: error.message });
@@ -196,12 +198,14 @@ router.post('/:id/schedule', async (req: AuthRequest, res: Response) => {
   try {
     const prisma: PrismaClient = req.app.get('prisma');
     const { scheduledAt } = req.body;
+    const scheduleDate = new Date(scheduledAt);
+    if (!scheduledAt || Number.isNaN(scheduleDate.getTime()) || scheduleDate <= new Date()) return res.status(422).json({ error: 'scheduledAt must be a valid future timestamp' });
 
     const result = await prisma.campaign.updateMany({
       where: { id: req.params.id, userId: req.userId },
       data: {
         status: 'SCHEDULED',
-        scheduledAt: new Date(scheduledAt),
+        scheduledAt: scheduleDate,
       },
     });
 

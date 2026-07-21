@@ -1,244 +1,59 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-BACKEND_PORT="${BACKEND_PORT:-4000}"
-FRONTEND_PORT="${FRONTEND_PORT:-5173}"
-DB_NAME="ai_marketing"
+project_root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Colors for terminal output
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-CYAN='\033[0;36m'
-NC='\033[0m' # No Color
+load_env_file() {
+  local key value env_file="$project_root/.env"
+  [ -f "$env_file" ] || return 0
+  while IFS='=' read -r key value; do
+    key="${key#export }"; [[ "$key" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || continue
+    [ -z "${!key+x}" ] || continue; value="${value%$'\r'}"
+    if [[ "$value" == \"*\" && "$value" == *\" ]]; then value="${value:1:${#value}-2}"; elif [[ "$value" == \'*\' && "$value" == *\' ]]; then value="${value:1:${#value}-2}"; fi
+    export "$key=$value"
+  done < "$env_file"
+}
 
-echo "=========================================="
-echo "  AI Marketing Automation - Startup Script"
-echo "=========================================="
-echo ""
-
-# Get script directory
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-BACKEND_DIR="$SCRIPT_DIR/backend"
-FRONTEND_DIR="$SCRIPT_DIR/frontend"
-
-# Set default DATABASE_URL if not provided
-if [[ -z "${DATABASE_URL:-}" ]]; then
-  echo "==> DATABASE_URL not set, using default..."
-  DB_USER="${USER:-$(whoami)}"
-  export DATABASE_URL="postgresql://${DB_USER}@localhost:5432/${DB_NAME}?schema=public"
+if [ "${1:-}" = "--help" ] || [ "${1:-}" = "-h" ]; then
+  echo "Usage: ./start.sh"
+  echo "Startup never installs packages, creates/resets/seeds a database, rewrites credentials, or kills unrelated processes."
+  echo "Apply reviewed migrations separately with: npm --prefix backend run db:deploy"
+  exit 0
 fi
-echo "DATABASE_URL: ${DATABASE_URL}"
-echo ""
+if [ "$#" -ne 0 ]; then echo "Unknown argument: $1"; exit 2; fi
 
-# Check if PostgreSQL is running
-echo "==> Checking PostgreSQL status..."
-if ! command -v psql &> /dev/null; then
-  echo "WARNING: psql command not found. Assuming PostgreSQL is configured correctly."
-else
-  # Try to connect to PostgreSQL server
-  if ! psql -h localhost -c "SELECT 1;" postgres >/dev/null 2>&1 && \
-     ! psql -c "SELECT 1;" postgres >/dev/null 2>&1; then
-    echo ""
-    echo "ERROR: Cannot connect to PostgreSQL server."
-    echo ""
-    echo "Please start PostgreSQL:"
-    echo "  macOS:  brew services start postgresql"
-    echo "  Linux:  sudo systemctl start postgresql"
-    echo ""
-    exit 1
-  fi
-  echo "PostgreSQL server is running."
+load_env_file
+backend_port="${BACKEND_PORT:-${PORT:?PORT or BACKEND_PORT is required}}"
+frontend_port="${FRONTEND_PORT:?FRONTEND_PORT is required}"
+export PORT="$backend_port"
+export ALLOWED_ORIGINS="${ALLOWED_ORIGINS:-http://${FRONTEND_HOST:-127.0.0.1}:$frontend_port}"
 
-  # Create database if it doesn't exist
-  echo ""
-  echo "==> Ensuring database '${DB_NAME}' exists..."
-  DB_EXISTS=0
-  set +o pipefail
-  if psql -h localhost -lqt 2>/dev/null | cut -d \| -f 1 | grep -qw "${DB_NAME}"; then DB_EXISTS=1; fi
-  if [ "${DB_EXISTS}" = "0" ] && psql -lqt 2>/dev/null | cut -d \| -f 1 | grep -qw "${DB_NAME}"; then DB_EXISTS=1; fi
-  set -o pipefail
-  if [ "${DB_EXISTS}" = "0" ]; then
-    echo "Creating database '${DB_NAME}'..."
-    createdb "${DB_NAME}" 2>/dev/null || createdb -h localhost "${DB_NAME}" 2>/dev/null || {
-      # Recheck — another process may have created it; or it already existed
-      if psql -lqt 2>/dev/null | cut -d \| -f 1 | grep -qw "${DB_NAME}" || \
-         psql -h localhost -lqt 2>/dev/null | cut -d \| -f 1 | grep -qw "${DB_NAME}"; then
-        echo "Database '${DB_NAME}' already exists (after retry)."
-      else
-        echo "Could not create database automatically."
-        echo "Please create it manually: createdb ${DB_NAME}"
-        exit 1
-      fi
-    }
-    echo "Database created successfully!"
-  else
-    echo "Database '${DB_NAME}' already exists."
-  fi
+for required in DATABASE_URL JWT_SECRET ALLOWED_ORIGINS; do
+  if [ -z "${!required:-}" ]; then echo "Missing required environment variable: ${required}"; exit 1; fi
+done
+if [ ! -d "$project_root/backend/node_modules" ] || [ ! -d "$project_root/frontend/node_modules" ]; then
+  echo "Dependencies are missing. Run npm ci separately in backend and frontend."
+  exit 1
 fi
-
-# Clean up processes on the ports
-echo ""
-echo "==> Cleaning up processes on ports ${BACKEND_PORT} and ${FRONTEND_PORT}..."
-for PORT in ${BACKEND_PORT} ${FRONTEND_PORT}; do
-  if lsof -ti tcp:"${PORT}" >/dev/null 2>&1; then
-    echo "Found processes on port ${PORT}, killing them..."
-    lsof -ti tcp:"${PORT}" | xargs kill -9 || true
-    sleep 1
+for assigned_port in "$backend_port" "$frontend_port"; do
+  if command -v lsof >/dev/null 2>&1 && lsof -tiTCP:"$assigned_port" -sTCP:LISTEN >/dev/null 2>&1; then
+    echo "Port $assigned_port is already in use; refusing to terminate another process." >&2; exit 1
   fi
 done
-echo "Ports are clear."
 
-# ========== BACKEND SETUP ==========
-echo ""
-echo "==> Setting up Backend..."
-cd "$BACKEND_DIR"
-
-# Check if node_modules exists
-if [ ! -d "node_modules" ]; then
-  echo "==> Installing backend dependencies..."
-  npm install
-else
-  echo "Backend dependencies already installed."
-fi
-
-# Generate Prisma client
-echo ""
-echo "==> Generating Prisma client..."
-npx prisma generate
-
-# Run database migrations
-echo ""
-echo "==> Running Prisma migrations..."
-npx prisma db push || {
-  echo "Migration failed. Trying to create initial schema..."
-  npx prisma db push --force-reset
-}
-
-# Update root .env file with current DATABASE_URL
-echo ""
-echo "==> Updating root .env file..."
-ROOT_ENV="$SCRIPT_DIR/.env"
-if [ -f "$ROOT_ENV" ]; then
-  if grep -q "^DATABASE_URL=" "$ROOT_ENV"; then
-    sed -i '' "s|^DATABASE_URL=.*|DATABASE_URL=\"${DATABASE_URL}\"|" "$ROOT_ENV" 2>/dev/null || \
-    sed -i "s|^DATABASE_URL=.*|DATABASE_URL=\"${DATABASE_URL}\"|" "$ROOT_ENV"
-  else
-    echo "DATABASE_URL=\"${DATABASE_URL}\"" >> "$ROOT_ENV"
-  fi
-else
-  echo "DATABASE_URL=\"${DATABASE_URL}\"" > "$ROOT_ENV"
-  echo "JWT_SECRET=\"ai-marketing-secret-change-in-production\"" >> "$ROOT_ENV"
-  echo "PORT=${BACKEND_PORT}" >> "$ROOT_ENV"
-  echo "NODE_ENV=development" >> "$ROOT_ENV"
-  echo "" >> "$ROOT_ENV"
-  echo "# OpenRouter AI Configuration" >> "$ROOT_ENV"
-  echo "OPENROUTER_API_KEY=\"your-openrouter-api-key-here\"" >> "$ROOT_ENV"
-  echo "OPENROUTER_MODEL=\"anthropic/claude-haiku-4.5\"" >> "$ROOT_ENV"
-fi
-
-# Check if database has been seeded
-echo ""
-echo "==> Checking if database needs seeding..."
-CONTACT_COUNT=$(psql "${DATABASE_URL}" -t -c "SELECT COUNT(*) FROM \"Contact\";" 2>/dev/null | tr -d ' ' || echo "0")
-if [ "${CONTACT_COUNT}" = "0" ] || [ -z "${CONTACT_COUNT}" ]; then
-  echo "Database appears empty. Running seed..."
-  npm run prisma:seed || npx tsx prisma/seed.ts
-else
-  echo "Database already contains data (${CONTACT_COUNT} contacts). Skipping seed."
-fi
-
-# ========== FRONTEND SETUP ==========
-echo ""
-echo "==> Setting up Frontend..."
-cd "$FRONTEND_DIR"
-
-# Check if node_modules exists
-if [ ! -d "node_modules" ]; then
-  echo "==> Installing frontend dependencies..."
-  npm install
-else
-  echo "Frontend dependencies already installed."
-fi
-
-# ========== START SERVICES ==========
-echo ""
-echo "=========================================="
-echo "  Starting AI Marketing Automation"
-echo "=========================================="
-echo ""
-
-# Function to cleanup on exit
+backend_pid=""
+frontend_pid=""
 cleanup() {
-  echo ""
-  echo "==> Shutting down services..."
-  if [ ! -z "${BACKEND_PID:-}" ]; then
-    kill $BACKEND_PID 2>/dev/null || true
-  fi
-  if [ ! -z "${FRONTEND_PID:-}" ]; then
-    kill $FRONTEND_PID 2>/dev/null || true
-  fi
-  echo "All services stopped."
-  exit 0
+  if [ -n "$backend_pid" ]; then kill "$backend_pid" 2>/dev/null || true; fi
+  if [ -n "$frontend_pid" ]; then kill "$frontend_pid" 2>/dev/null || true; fi
+  wait "$backend_pid" "$frontend_pid" 2>/dev/null || true
 }
+trap cleanup EXIT INT TERM
 
-trap cleanup SIGINT SIGTERM
-
-# Start backend
-echo "==> Starting backend on port ${BACKEND_PORT}..."
-cd "$BACKEND_DIR"
-npm run dev &
-BACKEND_PID=$!
-sleep 3
-
-# Check if backend started
-if ! kill -0 $BACKEND_PID 2>/dev/null; then
-  echo "ERROR: Backend failed to start!"
-  exit 1
-fi
-echo "Backend started (PID: $BACKEND_PID)"
-
-# Start frontend
-echo ""
-echo "==> Starting frontend on port ${FRONTEND_PORT}..."
-cd "$FRONTEND_DIR"
-npm run dev &
-FRONTEND_PID=$!
-sleep 3
-
-# Check if frontend started
-if ! kill -0 $FRONTEND_PID 2>/dev/null; then
-  echo "ERROR: Frontend failed to start!"
-  cleanup
-  exit 1
-fi
-echo "Frontend started (PID: $FRONTEND_PID)"
-
-echo ""
-echo -e "${GREEN}=========================================="
-echo "  AI Marketing Automation is running!"
-echo "==========================================${NC}"
-echo ""
-echo -e "${CYAN}Access the application at:${NC}"
-echo -e "  Frontend:    ${GREEN}http://localhost:${FRONTEND_PORT}${NC}"
-echo -e "  Backend API: ${GREEN}http://localhost:${BACKEND_PORT}${NC}"
-echo -e "  Health:      ${GREEN}http://localhost:${BACKEND_PORT}/api/health${NC}"
-echo ""
-echo -e "${CYAN}Demo credentials:${NC}"
-echo -e "  Email:    ${YELLOW}demo@example.com${NC}"
-echo -e "  Password: ${YELLOW}demo123${NC}"
-echo ""
-echo -e "${CYAN}AI Features Available:${NC}"
-echo "  - AI Segment Builder      - AI Customer Persona Creator"
-echo "  - AI Journey Optimizer    - AI Influencer Matcher"
-echo "  - AI Attribution Modeler  - AI Hashtag Generator"
-echo "  - AI Budget Allocator     - AI Landing Page Builder"
-echo "  - AI Fatigue Detector     - Plus 8 more AI tools!"
-echo ""
-echo -e "${YELLOW}Hot reload is enabled - your code changes will be detected automatically${NC}"
-echo -e "${YELLOW}Press Ctrl+C to stop all services${NC}"
-echo ""
-
-# Wait for both processes
-wait $BACKEND_PID $FRONTEND_PID
+echo "Starting marketing API and frontend without changing persistent state."
+(cd "$project_root/backend" && npm run serve) &
+backend_pid=$!
+(cd "$project_root/frontend" && VITE_BACKEND_PORT="$backend_port" VITE_FRONT_PORT="$frontend_port" npm run dev -- --host "${FRONTEND_HOST:-127.0.0.1}" --port "$frontend_port") &
+frontend_pid=$!
+while kill -0 "$backend_pid" 2>/dev/null && kill -0 "$frontend_pid" 2>/dev/null; do sleep 1; done
+wait "$backend_pid" "$frontend_pid"

@@ -6,8 +6,7 @@
  *   2. For each enrollment, find the next step (by `currentStep` index).
  *   3. Compute the scheduled time as (lastStepExecutedAt OR enrolledAt) + step.delayMinutes.
  *   4. If the scheduled time has arrived, execute the step:
- *        EMAIL  → send via nodemailer (or simulate)
- *        SMS    → send via twilio (or simulate)
+ *        EMAIL/SMS → rejected here; governed campaign delivery owns outreach
  *        WAIT   → just advance
  *        TAG_ADD/TAG_REMOVE → mutate ContactTag
  *        CONDITION → JSON config { field, op, value }; advance if true, skip if false
@@ -18,29 +17,6 @@
  */
 
 import { PrismaClient, EnrollmentStatus, StepStatus } from '@prisma/client';
-import nodemailer from 'nodemailer';
-import twilio from 'twilio';
-
-let mailer: nodemailer.Transporter | null = null;
-let twilioClient: any = null;
-
-function getMailer() {
-  if (mailer) return mailer;
-  if (!process.env.SMTP_HOST) return null;
-  mailer = nodemailer.createTransport({
-    host: process.env.SMTP_HOST,
-    port: parseInt(process.env.SMTP_PORT || '587'),
-    secure: process.env.SMTP_SECURE === 'true',
-    auth: process.env.SMTP_USER ? { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS } : undefined,
-  });
-  return mailer;
-}
-function getTwilio() {
-  if (twilioClient) return twilioClient;
-  if (!process.env.TWILIO_ACCOUNT_SID || !process.env.TWILIO_AUTH_TOKEN) return null;
-  twilioClient = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
-  return twilioClient;
-}
 
 export async function runAutomationEngine(prisma: PrismaClient): Promise<{ enrollmentsProcessed: number; stepsExecuted: number }> {
   const enrollments = await prisma.automationEnrollment.findMany({
@@ -75,29 +51,9 @@ export async function runAutomationEngine(prisma: PrismaClient): Promise<{ enrol
     let success = true;
     try {
       if (step.type === 'EMAIL') {
-        if (e.contact.email) {
-          const m = getMailer();
-          let subject = 'Automation Step';
-          let body = '';
-          let html = '';
-          if (step.templateId) {
-            const tmpl = await prisma.template.findUnique({ where: { id: step.templateId } });
-            if (tmpl) { subject = tmpl.subject || tmpl.name; body = tmpl.content || ''; html = tmpl.htmlContent || tmpl.content || ''; }
-          }
-          if (m) await m.sendMail({ from: process.env.SMTP_FROM || 'noreply@example.com', to: e.contact.email, subject, text: body, html });
-        }
+        throw new Error('Direct automation email is disabled; enqueue an approved campaign through the governed delivery queue');
       } else if (step.type === 'SMS') {
-        if (e.contact.phone) {
-          const t = getTwilio();
-          let body = '';
-          if (step.templateId) {
-            const tmpl = await prisma.template.findUnique({ where: { id: step.templateId } });
-            if (tmpl) body = tmpl.content || '';
-          }
-          if (t && process.env.TWILIO_FROM_NUMBER) {
-            await t.messages.create({ to: e.contact.phone, from: process.env.TWILIO_FROM_NUMBER, body });
-          }
-        }
+        throw new Error('Direct automation SMS is disabled; enqueue an approved campaign through the governed delivery queue');
       } else if (step.type === 'WAIT') {
         // no-op; delay is already accounted for
       } else if (step.type === 'TAG_ADD' || step.type === 'TAG_REMOVE') {
@@ -125,11 +81,15 @@ export async function runAutomationEngine(prisma: PrismaClient): Promise<{ enrol
       } else if (step.type === 'WEBHOOK') {
         const cfg = step.config ? JSON.parse(step.config) : {};
         if (cfg.url) {
-          await fetch(cfg.url, {
+          const url = new URL(cfg.url);
+          if (url.protocol !== 'https:') throw new Error('automation webhooks must use HTTPS');
+          const response = await fetch(url, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ contact: e.contact, event: 'automation_step', stepId: step.id }),
-          }).catch(() => {});
+            signal: AbortSignal.timeout(10_000),
+          });
+          if (!response.ok) throw new Error(`automation webhook returned HTTP ${response.status}`);
         }
       }
     } catch (err) {
@@ -146,11 +106,13 @@ export async function runAutomationEngine(prisma: PrismaClient): Promise<{ enrol
         executedAt: new Date(),
       },
     });
-    await prisma.automationEnrollment.update({
-      where: { id: e.id },
-      data: { currentStep: e.currentStep + 1 },
-    });
-    stepsExecuted++;
+    if (success) {
+      await prisma.automationEnrollment.update({
+        where: { id: e.id },
+        data: { currentStep: e.currentStep + 1 },
+      });
+      stepsExecuted++;
+    }
   }
 
   return { enrollmentsProcessed: enrollments.length, stepsExecuted };

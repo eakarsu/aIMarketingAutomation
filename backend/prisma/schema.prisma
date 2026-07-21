@@ -9,47 +9,56 @@ datasource db {
 
 // ============= USER & AUTH =============
 model User {
-  id                String    @id @default(uuid())
-  email             String    @unique
+  id                String   @id @default(uuid())
+  email             String   @unique
   password          String
   firstName         String
   lastName          String
   company           String?
   phone             String?
-  timezone          String?   @default("America/New_York")
-  notificationPrefs String?   @default("{}")
-  brandingSettings  String?   @default("{}")
-  role              UserRole  @default(USER)
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
+  timezone          String?  @default("America/New_York")
+  notificationPrefs String?  @default("{}")
+  brandingSettings  String?  @default("{}")
+  role              UserRole @default(USER)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
-  campaigns       Campaign[]
-  contacts        Contact[]
-  templates       Template[]
-  automations     Automation[]
-  landingPages    LandingPage[]
-  forms           Form[]
-  reviews         Review[]
-  integrations    Integration[]
-  aiGenerations   AIGeneration[]
-  segments        Segment[]
-  tags            Tag[]
-  customFields    CustomField[]
-  images          ImageLibrary[]
-  abTests         ABTest[]
-  aiSegments      AISegment[]
-  aiJourneys      AIJourney[]
-  aiAttributions  AIAttribution[]
-  aiBudgets       AIBudget[]
-  aiFatigues      AIFatigue[]
-  aiPersonas      AIPersona[]
-  aiInfluencers   AIInfluencer[]
-  aiHashtags      AIHashtag[]
-  aiLandingPages  AILandingPageTemplate[]
-  aiEmailCampaigns AIEmailCampaign[]
-  passwordResets   PasswordReset[]
-  emailVerified    Boolean   @default(false)
-  verificationToken String?  @unique
+  campaigns         Campaign[]
+  contacts          Contact[]
+  templates         Template[]
+  automations       Automation[]
+  landingPages      LandingPage[]
+  forms             Form[]
+  reviews           Review[]
+  integrations      Integration[]
+  aiGenerations     AIGeneration[]
+  segments          Segment[]
+  tags              Tag[]
+  customFields      CustomField[]
+  images            ImageLibrary[]
+  abTests           ABTest[]
+  aiSegments        AISegment[]
+  aiJourneys        AIJourney[]
+  aiAttributions    AIAttribution[]
+  aiBudgets         AIBudget[]
+  aiFatigues        AIFatigue[]
+  aiPersonas        AIPersona[]
+  aiInfluencers     AIInfluencer[]
+  aiHashtags        AIHashtag[]
+  aiLandingPages    AILandingPageTemplate[]
+  aiEmailCampaigns  AIEmailCampaign[]
+  passwordResets    PasswordReset[]
+  emailVerified     Boolean                 @default(false)
+  verificationToken String?                 @unique
+
+  sourceConnections  SourceConnection[]
+  marketingSyncRuns  MarketingSyncRun[]
+  consentEvents      ConsentEvent[]
+  suppressionEntries SuppressionEntry[]
+  leadRecords        LeadRecord[]
+  deliveryJobs       DeliveryJob[]
+  attributionTouches AttributionTouch[]
+  conversions        Conversion[]
 }
 
 model PasswordReset {
@@ -69,29 +78,38 @@ enum UserRole {
 
 // ============= CAMPAIGNS =============
 model Campaign {
-  id              String          @id @default(uuid())
-  userId          String
-  user            User            @relation(fields: [userId], references: [id])
-  name            String
-  description     String?
-  type            CampaignType
-  status          CampaignStatus  @default(DRAFT)
-  subject         String?
-  content         String?
-  htmlContent     String?
-  scheduledAt     DateTime?
-  sentAt          DateTime?
-  createdAt       DateTime        @default(now())
-  updatedAt       DateTime        @updatedAt
+  id                String                 @id @default(uuid())
+  userId            String
+  user              User                   @relation(fields: [userId], references: [id])
+  name              String
+  description       String?
+  type              CampaignType
+  status            CampaignStatus         @default(DRAFT)
+  subject           String?
+  content           String?
+  htmlContent       String?
+  scheduledAt       DateTime?
+  sentAt            DateTime?
+  createdAt         DateTime               @default(now())
+  updatedAt         DateTime               @updatedAt
+  approvalStatus    OutreachApprovalStatus @default(NOT_REQUIRED)
+  domainAuth        Json?
+  quietHours        Json?
+  frequencyCap7Days Int                    @default(3)
+  aiGenerated       Boolean                @default(false)
+  sensitiveSegment  Boolean                @default(false)
 
-  templateId      String?
-  template        Template?       @relation(fields: [templateId], references: [id])
-  segmentId       String?
-  segment         Segment?        @relation(fields: [segmentId], references: [id])
+  templateId String?
+  template   Template? @relation(fields: [templateId], references: [id])
+  segmentId  String?
+  segment    Segment?  @relation(fields: [segmentId], references: [id])
 
-  recipients      CampaignRecipient[]
-  analytics       CampaignAnalytics[]
-  abTests         ABTest[]
+  recipients         CampaignRecipient[]
+  analytics          CampaignAnalytics[]
+  abTests            ABTest[]
+  outreachApproval   OutreachApproval?
+  deliveryJobs       DeliveryJob[]
+  attributionTouches AttributionTouch[]
 }
 
 enum CampaignType {
@@ -111,18 +129,20 @@ enum CampaignStatus {
 }
 
 model CampaignRecipient {
-  id          String    @id @default(uuid())
-  campaignId  String
-  campaign    Campaign  @relation(fields: [campaignId], references: [id], onDelete: Cascade)
-  contactId   String
-  contact     Contact   @relation(fields: [contactId], references: [id])
-  status      RecipientStatus @default(PENDING)
-  sentAt      DateTime?
-  openedAt    DateTime?
-  clickedAt   DateTime?
-  bouncedAt   DateTime?
+  id             String          @id @default(uuid())
+  campaignId     String
+  campaign       Campaign        @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  contactId      String
+  contact        Contact         @relation(fields: [contactId], references: [id])
+  status         RecipientStatus @default(PENDING)
+  sentAt         DateTime?
+  openedAt       DateTime?
+  clickedAt      DateTime?
+  bouncedAt      DateTime?
   unsubscribedAt DateTime?
-  createdAt   DateTime  @default(now())
+  createdAt      DateTime        @default(now())
+
+  @@unique([campaignId, contactId])
 }
 
 enum RecipientStatus {
@@ -137,25 +157,25 @@ enum RecipientStatus {
 }
 
 model CampaignAnalytics {
-  id            String    @id @default(uuid())
-  campaignId    String
-  campaign      Campaign  @relation(fields: [campaignId], references: [id], onDelete: Cascade)
-  totalSent     Int       @default(0)
-  delivered     Int       @default(0)
-  opened        Int       @default(0)
-  clicked       Int       @default(0)
-  bounced       Int       @default(0)
-  unsubscribed  Int       @default(0)
-  conversions   Int       @default(0)
-  revenue       Float     @default(0)
-  recordedAt    DateTime  @default(now())
+  id           String   @id @default(uuid())
+  campaignId   String
+  campaign     Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  totalSent    Int      @default(0)
+  delivered    Int      @default(0)
+  opened       Int      @default(0)
+  clicked      Int      @default(0)
+  bounced      Int      @default(0)
+  unsubscribed Int      @default(0)
+  conversions  Int      @default(0)
+  revenue      Float    @default(0)
+  recordedAt   DateTime @default(now())
 }
 
 // ============= TEMPLATES =============
 model Template {
-  id          String        @id @default(uuid())
+  id          String       @id @default(uuid())
   userId      String
-  user        User          @relation(fields: [userId], references: [id])
+  user        User         @relation(fields: [userId], references: [id])
   name        String
   description String?
   type        TemplateType
@@ -163,11 +183,11 @@ model Template {
   content     String
   htmlContent String?
   category    String?
-  isPublic    Boolean       @default(false)
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
+  isPublic    Boolean      @default(false)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
 
-  campaigns   Campaign[]
+  campaigns       Campaign[]
   automationSteps AutomationStep[]
 }
 
@@ -180,28 +200,40 @@ enum TemplateType {
 
 // ============= CONTACTS =============
 model Contact {
-  id            String    @id @default(uuid())
-  userId        String
-  user          User      @relation(fields: [userId], references: [id])
-  email         String
-  phone         String?
-  firstName     String?
-  lastName      String?
-  company       String?
-  status        ContactStatus @default(ACTIVE)
-  source        String?
-  optedOutAt    DateTime?
-  birthday      DateTime?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  id                    String        @id @default(uuid())
+  userId                String
+  user                  User          @relation(fields: [userId], references: [id])
+  email                 String
+  phone                 String?
+  firstName             String?
+  lastName              String?
+  company               String?
+  status                ContactStatus @default(ACTIVE)
+  source                String?
+  optedOutAt            DateTime?
+  birthday              DateTime?
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+  region                PrivacyRegion @default(UNKNOWN)
+  timezoneOffsetMinutes Int           @default(0)
+  sourceUpdatedAt       DateTime?
+  sourceDigest          String?
+  dataQualityScore      Float?
 
-  tags          ContactTag[]
-  customFieldValues CustomFieldValue[]
-  segments      ContactSegment[]
-  campaignRecipients CampaignRecipient[]
+  tags                  ContactTag[]
+  customFieldValues     CustomFieldValue[]
+  segments              ContactSegment[]
+  campaignRecipients    CampaignRecipient[]
   automationEnrollments AutomationEnrollment[]
-  formSubmissions FormSubmission[]
-  reviews       Review[]
+  formSubmissions       FormSubmission[]
+  reviews               Review[]
+  sourceMappings        ContactSourceMapping[]
+  consentEvents         ConsentEvent[]
+  suppressionEntries    SuppressionEntry[]
+  leadRecord            LeadRecord?
+  deliveryJobs          DeliveryJob[]
+  attributionTouches    AttributionTouch[]
+  conversions           Conversion[]
 
   @@unique([userId, email])
 }
@@ -214,40 +246,40 @@ enum ContactStatus {
 }
 
 model Tag {
-  id          String      @id @default(uuid())
-  userId      String
-  user        User        @relation(fields: [userId], references: [id])
-  name        String
-  color       String      @default("#3B82F6")
-  createdAt   DateTime    @default(now())
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  name      String
+  color     String   @default("#3B82F6")
+  createdAt DateTime @default(now())
 
-  contacts    ContactTag[]
+  contacts ContactTag[]
 
   @@unique([userId, name])
 }
 
 model ContactTag {
-  id        String    @id @default(uuid())
+  id        String   @id @default(uuid())
   contactId String
-  contact   Contact   @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  contact   Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
   tagId     String
-  tag       Tag       @relation(fields: [tagId], references: [id], onDelete: Cascade)
-  createdAt DateTime  @default(now())
+  tag       Tag      @relation(fields: [tagId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
 
   @@unique([contactId, tagId])
 }
 
 model CustomField {
-  id          String    @id @default(uuid())
-  userId      String
-  user        User      @relation(fields: [userId], references: [id])
-  name        String
-  fieldType   FieldType
-  options     String?   // JSON array for dropdown options
-  required    Boolean   @default(false)
-  createdAt   DateTime  @default(now())
+  id        String    @id @default(uuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id])
+  name      String
+  fieldType FieldType
+  options   String? // JSON array for dropdown options
+  required  Boolean   @default(false)
+  createdAt DateTime  @default(now())
 
-  values      CustomFieldValue[]
+  values CustomFieldValue[]
 
   @@unique([userId, name])
 }
@@ -276,15 +308,15 @@ model CustomFieldValue {
 
 // ============= SEGMENTATION =============
 model Segment {
-  id          String    @id @default(uuid())
-  userId      String
-  user        User      @relation(fields: [userId], references: [id])
-  name        String
-  description String?
-  rules       String    // JSON rules for dynamic segmentation
-  isAISuggested Boolean @default(false)
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  id            String   @id @default(uuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id])
+  name          String
+  description   String?
+  rules         String // JSON rules for dynamic segmentation
+  isAISuggested Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   contacts    ContactSegment[]
   campaigns   Campaign[]
@@ -292,31 +324,31 @@ model Segment {
 }
 
 model ContactSegment {
-  id        String    @id @default(uuid())
+  id        String   @id @default(uuid())
   contactId String
-  contact   Contact   @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  contact   Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
   segmentId String
-  segment   Segment   @relation(fields: [segmentId], references: [id], onDelete: Cascade)
-  createdAt DateTime  @default(now())
+  segment   Segment  @relation(fields: [segmentId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
 
   @@unique([contactId, segmentId])
 }
 
 // ============= AUTOMATION =============
 model Automation {
-  id          String            @id @default(uuid())
+  id          String           @id @default(uuid())
   userId      String
-  user        User              @relation(fields: [userId], references: [id])
+  user        User             @relation(fields: [userId], references: [id])
   name        String
   description String?
   type        AutomationType
-  status      AutomationStatus  @default(INACTIVE)
-  trigger     String            // JSON trigger configuration
-  createdAt   DateTime          @default(now())
-  updatedAt   DateTime          @updatedAt
+  status      AutomationStatus @default(INACTIVE)
+  trigger     String // JSON trigger configuration
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
 
-  segmentId   String?
-  segment     Segment?          @relation(fields: [segmentId], references: [id])
+  segmentId String?
+  segment   Segment? @relation(fields: [segmentId], references: [id])
 
   steps       AutomationStep[]
   enrollments AutomationEnrollment[]
@@ -337,16 +369,16 @@ enum AutomationStatus {
 }
 
 model AutomationStep {
-  id            String      @id @default(uuid())
-  automationId  String
-  automation    Automation  @relation(fields: [automationId], references: [id], onDelete: Cascade)
-  order         Int
-  type          StepType
-  delayMinutes  Int         @default(0)
-  templateId    String?
-  template      Template?   @relation(fields: [templateId], references: [id])
-  config        String?     // JSON configuration
-  createdAt     DateTime    @default(now())
+  id           String     @id @default(uuid())
+  automationId String
+  automation   Automation @relation(fields: [automationId], references: [id], onDelete: Cascade)
+  order        Int
+  type         StepType
+  delayMinutes Int        @default(0)
+  templateId   String?
+  template     Template?  @relation(fields: [templateId], references: [id])
+  config       String? // JSON configuration
+  createdAt    DateTime   @default(now())
 
   enrollmentSteps EnrollmentStep[]
 }
@@ -362,17 +394,17 @@ enum StepType {
 }
 
 model AutomationEnrollment {
-  id            String      @id @default(uuid())
-  automationId  String
-  automation    Automation  @relation(fields: [automationId], references: [id], onDelete: Cascade)
-  contactId     String
-  contact       Contact     @relation(fields: [contactId], references: [id], onDelete: Cascade)
-  status        EnrollmentStatus @default(ACTIVE)
-  currentStep   Int         @default(0)
-  enrolledAt    DateTime    @default(now())
-  completedAt   DateTime?
+  id           String           @id @default(uuid())
+  automationId String
+  automation   Automation       @relation(fields: [automationId], references: [id], onDelete: Cascade)
+  contactId    String
+  contact      Contact          @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  status       EnrollmentStatus @default(ACTIVE)
+  currentStep  Int              @default(0)
+  enrolledAt   DateTime         @default(now())
+  completedAt  DateTime?
 
-  steps         EnrollmentStep[]
+  steps EnrollmentStep[]
 }
 
 enum EnrollmentStatus {
@@ -383,15 +415,15 @@ enum EnrollmentStatus {
 }
 
 model EnrollmentStep {
-  id            String              @id @default(uuid())
-  enrollmentId  String
-  enrollment    AutomationEnrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
-  stepId        String
-  step          AutomationStep      @relation(fields: [stepId], references: [id], onDelete: Cascade)
-  status        StepStatus          @default(PENDING)
-  scheduledAt   DateTime?
-  executedAt    DateTime?
-  createdAt     DateTime            @default(now())
+  id           String               @id @default(uuid())
+  enrollmentId String
+  enrollment   AutomationEnrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  stepId       String
+  step         AutomationStep       @relation(fields: [stepId], references: [id], onDelete: Cascade)
+  status       StepStatus           @default(PENDING)
+  scheduledAt  DateTime?
+  executedAt   DateTime?
+  createdAt    DateTime             @default(now())
 }
 
 enum StepStatus {
@@ -404,78 +436,78 @@ enum StepStatus {
 
 // ============= CONTENT =============
 model LandingPage {
-  id          String    @id @default(uuid())
+  id          String   @id @default(uuid())
   userId      String
-  user        User      @relation(fields: [userId], references: [id])
+  user        User     @relation(fields: [userId], references: [id])
   name        String
-  slug        String    @unique
+  slug        String   @unique
   htmlContent String
   cssContent  String?
   jsContent   String?
-  isPublished Boolean   @default(false)
-  views       Int       @default(0)
-  conversions Int       @default(0)
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  isPublished Boolean  @default(false)
+  views       Int      @default(0)
+  conversions Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-  forms       Form[]
+  forms Form[]
 }
 
 model Form {
-  id            String    @id @default(uuid())
+  id            String       @id @default(uuid())
   userId        String
-  user          User      @relation(fields: [userId], references: [id])
+  user          User         @relation(fields: [userId], references: [id])
   name          String
   description   String?
-  fields        String    // JSON array of form fields
-  submitAction  String?   // JSON action configuration
+  fields        String // JSON array of form fields
+  submitAction  String? // JSON action configuration
   landingPageId String?
   landingPage   LandingPage? @relation(fields: [landingPageId], references: [id])
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
 
-  submissions   FormSubmission[]
+  submissions FormSubmission[]
 }
 
 model FormSubmission {
-  id          String    @id @default(uuid())
-  formId      String
-  form        Form      @relation(fields: [formId], references: [id], onDelete: Cascade)
-  contactId   String?
-  contact     Contact?  @relation(fields: [contactId], references: [id])
-  data        String    // JSON submission data
-  ipAddress   String?
-  userAgent   String?
-  createdAt   DateTime  @default(now())
+  id        String   @id @default(uuid())
+  formId    String
+  form      Form     @relation(fields: [formId], references: [id], onDelete: Cascade)
+  contactId String?
+  contact   Contact? @relation(fields: [contactId], references: [id])
+  data      String // JSON submission data
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
 }
 
 model ImageLibrary {
-  id          String    @id @default(uuid())
-  userId      String
-  user        User      @relation(fields: [userId], references: [id])
-  name        String
-  filename    String
-  url         String
-  mimeType    String
-  size        Int
-  isAIGenerated Boolean @default(false)
-  createdAt   DateTime  @default(now())
+  id            String   @id @default(uuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id])
+  name          String
+  filename      String
+  url           String
+  mimeType      String
+  size          Int
+  isAIGenerated Boolean  @default(false)
+  createdAt     DateTime @default(now())
 }
 
 // ============= ANALYTICS & A/B TESTING =============
 model ABTest {
-  id          String      @id @default(uuid())
-  userId      String
-  user        User        @relation(fields: [userId], references: [id])
-  campaignId  String
-  campaign    Campaign    @relation(fields: [campaignId], references: [id], onDelete: Cascade)
-  name        String
-  status      ABTestStatus @default(RUNNING)
+  id            String       @id @default(uuid())
+  userId        String
+  user          User         @relation(fields: [userId], references: [id])
+  campaignId    String
+  campaign      Campaign     @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  name          String
+  status        ABTestStatus @default(RUNNING)
   winnerVariant String?
-  createdAt   DateTime    @default(now())
-  endedAt     DateTime?
+  createdAt     DateTime     @default(now())
+  endedAt       DateTime?
 
-  variants    ABTestVariant[]
+  variants ABTestVariant[]
 }
 
 enum ABTestStatus {
@@ -485,39 +517,39 @@ enum ABTestStatus {
 }
 
 model ABTestVariant {
-  id          String    @id @default(uuid())
+  id          String   @id @default(uuid())
   abTestId    String
-  abTest      ABTest    @relation(fields: [abTestId], references: [id], onDelete: Cascade)
+  abTest      ABTest   @relation(fields: [abTestId], references: [id], onDelete: Cascade)
   name        String
   subject     String?
   content     String?
-  percentage  Float     @default(50)
-  sent        Int       @default(0)
-  opened      Int       @default(0)
-  clicked     Int       @default(0)
-  conversions Int       @default(0)
-  createdAt   DateTime  @default(now())
+  percentage  Float    @default(50)
+  sent        Int      @default(0)
+  opened      Int      @default(0)
+  clicked     Int      @default(0)
+  conversions Int      @default(0)
+  createdAt   DateTime @default(now())
 }
 
 // ============= REPUTATION / REVIEWS =============
 model Review {
-  id          String        @id @default(uuid())
+  id          String         @id @default(uuid())
   userId      String
-  user        User          @relation(fields: [userId], references: [id])
+  user        User           @relation(fields: [userId], references: [id])
   contactId   String?
-  contact     Contact?      @relation(fields: [contactId], references: [id])
+  contact     Contact?       @relation(fields: [contactId], references: [id])
   platform    ReviewPlatform
   externalId  String?
   rating      Int
   content     String?
   authorName  String
   authorEmail String?
-  status      ReviewStatus  @default(PENDING)
+  status      ReviewStatus   @default(PENDING)
   response    String?
   respondedAt DateTime?
   publishedAt DateTime?
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
 }
 
 enum ReviewPlatform {
@@ -536,16 +568,16 @@ enum ReviewStatus {
 
 // ============= INTEGRATIONS =============
 model Integration {
-  id          String            @id @default(uuid())
-  userId      String
-  user        User              @relation(fields: [userId], references: [id])
-  type        IntegrationType
-  name        String
-  config      String            // Encrypted JSON configuration
-  status      IntegrationStatus @default(ACTIVE)
-  lastSyncAt  DateTime?
-  createdAt   DateTime          @default(now())
-  updatedAt   DateTime          @updatedAt
+  id         String            @id @default(uuid())
+  userId     String
+  user       User              @relation(fields: [userId], references: [id])
+  type       IntegrationType
+  name       String
+  config     String // Encrypted JSON configuration
+  status     IntegrationStatus @default(ACTIVE)
+  lastSyncAt DateTime?
+  createdAt  DateTime          @default(now())
+  updatedAt  DateTime          @updatedAt
 }
 
 enum IntegrationType {
@@ -574,16 +606,423 @@ enum IntegrationStatus {
   ERROR
 }
 
+// ============= GOVERNED CUSTOMER OPERATIONS =============
+
+model SourceConnection {
+  id              String                 @id @default(uuid())
+  userId          String
+  name            String
+  kind            CustomerSourceKind
+  direction       SyncDirection
+  status          SourceConnectionStatus @default(INACTIVE)
+  configEncrypted String
+  cursor          String?
+  lastSyncAt      DateTime?
+  lastError       String?
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
+
+  user     User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  mappings ContactSourceMapping[]
+  syncRuns MarketingSyncRun[]
+
+  @@unique([userId, kind, name])
+  @@index([userId, status])
+}
+
+model ContactSourceMapping {
+  id              String    @id @default(uuid())
+  connectionId    String
+  contactId       String
+  externalId      String
+  remoteDigest    String
+  lastSyncedAt    DateTime  @default(now())
+  remoteUpdatedAt DateTime?
+  deletedAt       DateTime?
+
+  connection SourceConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  contact    Contact          @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  @@unique([connectionId, externalId])
+  @@unique([connectionId, contactId])
+  @@index([contactId])
+  @@index([connectionId, deletedAt])
+}
+
+model MarketingSyncRun {
+  id             String        @id @default(uuid())
+  userId         String
+  connectionId   String
+  direction      SyncDirection
+  status         SyncRunStatus @default(QUEUED)
+  idempotencyKey String
+  cursorBefore   String?
+  cursorAfter    String?
+  pulled         Int           @default(0)
+  pushed         Int           @default(0)
+  deduplicated   Int           @default(0)
+  deleted        Int           @default(0)
+  conflicts      Int           @default(0)
+  error          Json?
+  attempt        Int           @default(0)
+  maxAttempts    Int           @default(3)
+  availableAt    DateTime      @default(now())
+  leaseOwner     String?
+  leaseExpiresAt DateTime?
+  startedAt      DateTime?
+  completedAt    DateTime?
+  createdAt      DateTime      @default(now())
+
+  user       User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  connection SourceConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, idempotencyKey])
+  @@index([status, availableAt])
+  @@index([connectionId, createdAt])
+}
+
+model ConsentEvent {
+  id              String          @id @default(uuid())
+  userId          String
+  contactId       String
+  channel         OutreachChannel
+  status          ConsentStatus
+  lawfulBasis     LawfulBasis
+  source          String
+  evidenceDigest  String
+  privacyNoticeAt DateTime?
+  expiresAt       DateTime?
+  occurredAt      DateTime
+  createdAt       DateTime        @default(now())
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  contact Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  @@index([userId, contactId, channel, occurredAt])
+}
+
+model SuppressionEntry {
+  id           String             @id @default(uuid())
+  userId       String
+  contactId    String?
+  identityHash String
+  channel      SuppressionChannel
+  reason       SuppressionReason
+  region       PrivacyRegion
+  active       Boolean            @default(true)
+  source       String
+  createdAt    DateTime           @default(now())
+  revokedAt    DateTime?
+
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  contact Contact? @relation(fields: [contactId], references: [id], onDelete: SetNull)
+
+  @@unique([userId, identityHash, channel])
+  @@index([userId, active])
+  @@index([contactId])
+}
+
+model LeadRecord {
+  id            String        @id @default(uuid())
+  userId        String
+  contactId     String        @unique
+  state         LeadState     @default(NEW)
+  ownerId       String?
+  handoffStatus HandoffStatus @default(NONE)
+  retryAt       DateTime?
+  version       Int           @default(1)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  contact     Contact          @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  transitions LeadTransition[]
+
+  @@index([userId, state])
+  @@index([ownerId, state])
+  @@index([retryAt])
+}
+
+model LeadTransition {
+  id           String    @id @default(uuid())
+  leadId       String
+  fromState    LeadState
+  toState      LeadState
+  reason       String
+  actorId      String
+  approvalId   String?
+  conversionId String?
+  occurredAt   DateTime  @default(now())
+
+  lead LeadRecord @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@index([leadId, occurredAt])
+}
+
+model OutreachApproval {
+  id           String                 @id @default(uuid())
+  campaignId   String                 @unique
+  status       OutreachApprovalStatus @default(PENDING)
+  requestedBy  String
+  reviewedBy   String?
+  attestations Json?
+  comment      String?
+  requestedAt  DateTime               @default(now())
+  decidedAt    DateTime?
+
+  campaign Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+}
+
+model DeliveryJob {
+  id                String            @id @default(uuid())
+  userId            String
+  campaignId        String
+  contactId         String
+  channel           OutreachChannel
+  status            DeliveryJobStatus @default(QUEUED)
+  policyDecision    Json
+  idempotencyKey    String
+  attempt           Int               @default(0)
+  maxAttempts       Int               @default(3)
+  availableAt       DateTime          @default(now())
+  leaseOwner        String?
+  leaseExpiresAt    DateTime?
+  cancelRequestedAt DateTime?
+  provider          String?
+  providerMessageId String?
+  providerReceipt   Json?
+  error             Json?
+  sentAt            DateTime?
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  user          User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  campaign      Campaign          @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  contact       Contact           @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  attempts      DeliveryAttempt[]
+  webhookEvents WebhookDelivery[]
+
+  @@unique([userId, idempotencyKey])
+  @@unique([provider, providerMessageId])
+  @@index([status, availableAt])
+  @@index([campaignId, status])
+  @@index([contactId, createdAt])
+}
+
+model DeliveryAttempt {
+  id                String    @id @default(uuid())
+  deliveryJobId     String
+  attempt           Int
+  provider          String
+  requestDigest     String
+  providerMessageId String?
+  status            String
+  errorCode         String?
+  retryable         Boolean   @default(false)
+  startedAt         DateTime  @default(now())
+  completedAt       DateTime?
+
+  deliveryJob DeliveryJob @relation(fields: [deliveryJobId], references: [id], onDelete: Cascade)
+
+  @@unique([deliveryJobId, attempt])
+  @@index([status, startedAt])
+}
+
+model WebhookDelivery {
+  id              String    @id @default(uuid())
+  provider        String
+  eventId         String
+  eventType       String
+  payloadDigest   String
+  signatureDigest String
+  deliveryJobId   String?
+  receivedAt      DateTime  @default(now())
+  processedAt     DateTime?
+
+  deliveryJob DeliveryJob? @relation(fields: [deliveryJobId], references: [id], onDelete: SetNull)
+
+  @@unique([provider, eventId])
+  @@index([deliveryJobId, receivedAt])
+}
+
+model AttributionTouch {
+  id         String   @id @default(uuid())
+  userId     String
+  contactId  String
+  campaignId String?
+  channel    String
+  eventType  String
+  externalId String?
+  occurredAt DateTime
+  metadata   Json?
+  createdAt  DateTime @default(now())
+
+  user     User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  contact  Contact             @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  campaign Campaign?           @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  credits  AttributionCredit[]
+
+  @@unique([userId, externalId])
+  @@index([contactId, occurredAt])
+  @@index([campaignId, occurredAt])
+}
+
+model Conversion {
+  id         String   @id @default(uuid())
+  userId     String
+  contactId  String
+  externalId String
+  type       String
+  value      Decimal? @db.Decimal(18, 2)
+  currency   String?
+  occurredAt DateTime
+  metadata   Json?
+  createdAt  DateTime @default(now())
+
+  user    User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  contact Contact             @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  credits AttributionCredit[]
+
+  @@unique([userId, externalId])
+  @@index([contactId, occurredAt])
+}
+
+model AttributionCredit {
+  id           String   @id @default(uuid())
+  conversionId String
+  touchId      String
+  model        String
+  credit       Decimal  @db.Decimal(8, 7)
+  createdAt    DateTime @default(now())
+
+  conversion Conversion       @relation(fields: [conversionId], references: [id], onDelete: Cascade)
+  touch      AttributionTouch @relation(fields: [touchId], references: [id], onDelete: Cascade)
+
+  @@unique([conversionId, touchId, model])
+  @@index([touchId])
+}
+
+enum CustomerSourceKind {
+  CRM
+  EMAIL
+  CALENDAR
+  ENRICHMENT
+  CONSENT
+  SUPPRESSION
+}
+
+enum SyncDirection {
+  PULL
+  PUSH
+  BIDIRECTIONAL
+}
+
+enum SourceConnectionStatus {
+  ACTIVE
+  INACTIVE
+  ERROR
+}
+
+enum SyncRunStatus {
+  QUEUED
+  RUNNING
+  RETRY_WAIT
+  COMPLETED
+  PARTIAL
+  FAILED
+  DEAD_LETTER
+  CANCELLED
+}
+
+enum PrivacyRegion {
+  EU
+  UK
+  US
+  CA
+  BR
+  AU
+  UNKNOWN
+}
+
+enum OutreachChannel {
+  EMAIL
+  SMS
+}
+
+enum ConsentStatus {
+  GRANTED
+  DENIED
+  REVOKED
+  EXPIRED
+}
+
+enum LawfulBasis {
+  EXPLICIT_CONSENT
+  LEGITIMATE_INTEREST
+  CONTRACT
+  NOT_APPLICABLE
+}
+
+enum SuppressionChannel {
+  ALL
+  EMAIL
+  SMS
+}
+
+enum SuppressionReason {
+  OPT_OUT
+  HARD_BOUNCE
+  COMPLAINT
+  LEGAL_REQUEST
+  INVALID_ADDRESS
+  MANUAL
+}
+
+enum LeadState {
+  NEW
+  QUALIFIED
+  ASSIGNED
+  ENGAGED
+  SALES_ACCEPTED
+  CONVERTED
+  RECYCLED
+  DISQUALIFIED
+}
+
+enum HandoffStatus {
+  NONE
+  PENDING
+  ACCEPTED
+  RETURNED
+}
+
+enum OutreachApprovalStatus {
+  NOT_REQUIRED
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum DeliveryJobStatus {
+  QUEUED
+  RUNNING
+  RETRY_WAIT
+  SENT
+  FAILED
+  DEAD_LETTER
+  CANCELLED
+}
+
 // ============= AI GENERATIONS =============
 model AIGeneration {
-  id          String          @id @default(uuid())
-  userId      String
-  user        User            @relation(fields: [userId], references: [id])
-  type        AIGenerationType
-  prompt      String
-  result      String
-  metadata    String?         // JSON metadata
-  createdAt   DateTime        @default(now())
+  id        String           @id @default(uuid())
+  userId    String
+  user      User             @relation(fields: [userId], references: [id])
+  type      AIGenerationType
+  prompt    String
+  result    String
+  metadata  String? // JSON metadata
+  createdAt DateTime         @default(now())
 }
 
 enum AIGenerationType {
@@ -611,177 +1050,177 @@ enum AIGenerationType {
 
 // ============= AI SEGMENT BUILDER =============
 model AISegment {
-  id              String    @id @default(uuid())
-  userId          String
-  user            User      @relation(fields: [userId], references: [id])
-  name            String
-  description     String?
-  criteria        String    // JSON criteria
-  contactCount    Int       @default(0)
-  confidence      Float     @default(0)
-  insights        String?   // JSON insights
-  status          String    @default("active")
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  id           String   @id @default(uuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id])
+  name         String
+  description  String?
+  criteria     String // JSON criteria
+  contactCount Int      @default(0)
+  confidence   Float    @default(0)
+  insights     String? // JSON insights
+  status       String   @default("active")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 }
 
 // ============= AI CUSTOMER JOURNEY =============
 model AIJourney {
-  id              String    @id @default(uuid())
+  id              String   @id @default(uuid())
   userId          String
-  user            User      @relation(fields: [userId], references: [id])
+  user            User     @relation(fields: [userId], references: [id])
   name            String
   description     String?
-  stages          String    // JSON stages
-  touchpoints     String?   // JSON touchpoints
-  recommendations String?   // JSON recommendations
-  conversionRate  Float     @default(0)
-  status          String    @default("active")
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  stages          String // JSON stages
+  touchpoints     String? // JSON touchpoints
+  recommendations String? // JSON recommendations
+  conversionRate  Float    @default(0)
+  status          String   @default("active")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 }
 
 // ============= AI ATTRIBUTION MODEL =============
 model AIAttribution {
-  id              String    @id @default(uuid())
-  userId          String
-  user            User      @relation(fields: [userId], references: [id])
-  name            String
-  modelType       String    // first-touch, last-touch, linear, time-decay, data-driven
-  channels        String    // JSON channels with attribution percentages
-  insights        String?   // JSON insights
-  revenue         Float     @default(0)
-  conversions     Int       @default(0)
-  status          String    @default("active")
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  id          String   @id @default(uuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  name        String
+  modelType   String // first-touch, last-touch, linear, time-decay, data-driven
+  channels    String // JSON channels with attribution percentages
+  insights    String? // JSON insights
+  revenue     Float    @default(0)
+  conversions Int      @default(0)
+  status      String   @default("active")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }
 
 // ============= AI BUDGET ALLOCATION =============
 model AIBudget {
-  id              String    @id @default(uuid())
+  id              String   @id @default(uuid())
   userId          String
-  user            User      @relation(fields: [userId], references: [id])
+  user            User     @relation(fields: [userId], references: [id])
   name            String
   totalBudget     Float
-  allocations     String    // JSON allocations per channel
-  recommendations String?   // JSON recommendations
-  projectedROI    Float     @default(0)
-  status          String    @default("active")
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  allocations     String // JSON allocations per channel
+  recommendations String? // JSON recommendations
+  projectedROI    Float    @default(0)
+  status          String   @default("active")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 }
 
 // ============= AI FATIGUE DETECTION =============
 model AIFatigue {
-  id              String    @id @default(uuid())
+  id              String   @id @default(uuid())
   userId          String
-  user            User      @relation(fields: [userId], references: [id])
+  user            User     @relation(fields: [userId], references: [id])
   contactId       String?
   segmentName     String?
-  fatigueScore    Float     @default(0)
-  emailFrequency  Int       @default(0)
-  openRateDecline Float     @default(0)
-  recommendations String?   // JSON recommendations
-  status          String    @default("active")
-  detectedAt      DateTime  @default(now())
+  fatigueScore    Float    @default(0)
+  emailFrequency  Int      @default(0)
+  openRateDecline Float    @default(0)
+  recommendations String? // JSON recommendations
+  status          String   @default("active")
+  detectedAt      DateTime @default(now())
 }
 
 // ============= AI CUSTOMER PERSONA =============
 model AIPersona {
-  id              String    @id @default(uuid())
-  userId          String
-  user            User      @relation(fields: [userId], references: [id])
-  name            String
-  avatar          String?
-  demographics    String    // JSON demographics
-  psychographics  String?   // JSON psychographics
-  behaviors       String?   // JSON behaviors
-  painPoints      String?   // JSON pain points
-  goals           String?   // JSON goals
-  preferredChannels String? // JSON channels
+  id                 String   @id @default(uuid())
+  userId             String
+  user               User     @relation(fields: [userId], references: [id])
+  name               String
+  avatar             String?
+  demographics       String // JSON demographics
+  psychographics     String? // JSON psychographics
+  behaviors          String? // JSON behaviors
+  painPoints         String? // JSON pain points
+  goals              String? // JSON goals
+  preferredChannels  String? // JSON channels
   contentPreferences String? // JSON content preferences
-  status          String    @default("active")
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  status             String   @default("active")
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 }
 
 // ============= AI INFLUENCER MATCHING =============
 model AIInfluencer {
-  id              String    @id @default(uuid())
-  userId          String
-  user            User      @relation(fields: [userId], references: [id])
-  name            String
-  platform        String
-  niche           String
-  followers       Int       @default(0)
-  engagementRate  Float     @default(0)
-  matchScore      Float     @default(0)
-  estimatedReach  Int       @default(0)
-  estimatedCost   Float     @default(0)
-  contactInfo     String?   // JSON contact info
-  notes           String?
-  status          String    @default("potential")
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  id             String   @id @default(uuid())
+  userId         String
+  user           User     @relation(fields: [userId], references: [id])
+  name           String
+  platform       String
+  niche          String
+  followers      Int      @default(0)
+  engagementRate Float    @default(0)
+  matchScore     Float    @default(0)
+  estimatedReach Int      @default(0)
+  estimatedCost  Float    @default(0)
+  contactInfo    String? // JSON contact info
+  notes          String?
+  status         String   @default("potential")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 }
 
 // ============= AI HASHTAG SUGGESTIONS =============
 model AIHashtag {
-  id              String    @id @default(uuid())
+  id              String   @id @default(uuid())
   userId          String
-  user            User      @relation(fields: [userId], references: [id])
+  user            User     @relation(fields: [userId], references: [id])
   topic           String
   platform        String
-  hashtags        String    // JSON array of hashtags
-  popularity      String?   // JSON popularity scores
-  recommendations String?   // JSON recommendations
-  status          String    @default("active")
-  createdAt       DateTime  @default(now())
+  hashtags        String // JSON array of hashtags
+  popularity      String? // JSON popularity scores
+  recommendations String? // JSON recommendations
+  status          String   @default("active")
+  createdAt       DateTime @default(now())
 }
 
 // ============= AI LANDING PAGE BUILDER =============
 model AILandingPageTemplate {
-  id              String    @id @default(uuid())
-  userId          String
-  user            User      @relation(fields: [userId], references: [id])
-  name            String
-  purpose         String
-  industry        String?
-  headline        String
-  subheadline     String?
-  bodyCopy        String
-  ctaText         String
-  ctaColor        String?
-  layout          String    // JSON layout configuration
-  colorScheme     String?   // JSON colors
-  conversionTips  String?   // JSON tips
-  status          String    @default("draft")
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  id             String   @id @default(uuid())
+  userId         String
+  user           User     @relation(fields: [userId], references: [id])
+  name           String
+  purpose        String
+  industry       String?
+  headline       String
+  subheadline    String?
+  bodyCopy       String
+  ctaText        String
+  ctaColor       String?
+  layout         String // JSON layout configuration
+  colorScheme    String? // JSON colors
+  conversionTips String? // JSON tips
+  status         String   @default("draft")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 }
 
 // ============= AI EMAIL CAMPAIGN WRITER =============
 model AIEmailCampaign {
-  id              String    @id @default(uuid())
-  userId          String
-  user            User      @relation(fields: [userId], references: [id])
-  name            String
-  campaignType    String    // welcome, promotional, newsletter, re-engagement, announcement, product-launch, event, seasonal
-  subject         String
-  previewText     String?
-  body            String    @db.Text
-  sections        String?   @db.Text  // JSON array of email sections
-  ctaText         String?
-  ctaUrl          String?
-  tone            String?
-  industry        String?
-  audience        String?
-  estimatedOpenRate   Float?
-  estimatedClickRate  Float?
-  abVariants      String?   @db.Text  // JSON array of A/B test subject line variants
-  sendTimeRec     String?   // Recommended send time
-  tips            String?   @db.Text  // JSON array of optimization tips
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  id                 String   @id @default(uuid())
+  userId             String
+  user               User     @relation(fields: [userId], references: [id])
+  name               String
+  campaignType       String // welcome, promotional, newsletter, re-engagement, announcement, product-launch, event, seasonal
+  subject            String
+  previewText        String?
+  body               String   @db.Text
+  sections           String?  @db.Text // JSON array of email sections
+  ctaText            String?
+  ctaUrl             String?
+  tone               String?
+  industry           String?
+  audience           String?
+  estimatedOpenRate  Float?
+  estimatedClickRate Float?
+  abVariants         String?  @db.Text // JSON array of A/B test subject line variants
+  sendTimeRec        String? // Recommended send time
+  tips               String?  @db.Text // JSON array of optimization tips
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 }
