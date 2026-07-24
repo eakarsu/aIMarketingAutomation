@@ -124,8 +124,8 @@ export default function Login() {
             <button
               type="button"
               onClick={() => {
-                setEmail('demo@example.com');
-                setPassword('demo123');
+                setEmail(import.meta.env.VITE_DEMO_EMAIL || '');
+                setPassword(import.meta.env.VITE_DEMO_PASSWORD || '');
               }}
               className="w-full flex justify-center items-center px-4 py-2 bg-blue-600 text-white font-medium rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors"
             >
