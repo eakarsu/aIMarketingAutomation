@@ -31,6 +31,7 @@ import exportRoutes from './routes/export';
 import webhookRoutes from './routes/webhooks';
 import sourceConnectionRoutes from './routes/sourceConnections';
 import governanceRoutes from './routes/governance';
+import runtimeAiRoutes from './routes/runtimeAi';
 import { authMiddleware } from './middleware/auth';
 import { requireRole } from './middleware/rbac';
 
@@ -107,6 +108,7 @@ app.use('/api/webhooks', webhookRoutes);
 app.use('/api/inbound-webhooks', inboundWebhookRoutes); // PUBLIC — no auth (provider callbacks)
 app.use('/api/source-connections', sourceConnectionRoutes);
 app.use('/api/governance', governanceRoutes);
+app.use('/api/runtime-ai', runtimeAiRoutes);
 
 // Generated recommendation endpoints previously returned synthetic feature output.
 // Keep explicit tombstones so old clients fail honestly instead of receiving demos.
