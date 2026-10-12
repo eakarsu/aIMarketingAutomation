@@ -52,7 +52,7 @@ export default function Campaigns() {
       params.sortBy = sortBy;
       params.sortOrder = sortOrder;
       const response = await campaignsAPI.getAll(params);
-      setCampaigns(response.data);
+      setCampaigns(Array.isArray(response.data?.data) ? response.data.data : []);
     } catch (error) {
       toast.error('Failed to load campaigns');
     } finally {

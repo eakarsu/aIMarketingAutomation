@@ -51,7 +51,7 @@ export default function Segments() {
   const fetchSegments = async () => {
     try {
       const response = await segmentsAPI.getAll();
-      setSegments(response.data);
+      setSegments(Array.isArray(response.data?.data) ? response.data.data : []);
     } catch (error) {
       toast.error('Failed to load segments');
     } finally {

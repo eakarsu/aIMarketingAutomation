@@ -64,7 +64,7 @@ export default function Automations() {
       if (sortBy) params.sortBy = sortBy;
       if (sortOrder) params.sortOrder = sortOrder;
       const response = await automationsAPI.getAll(params);
-      setAutomations(response.data);
+      setAutomations(Array.isArray(response.data?.data) ? response.data.data : []);
     } catch (error) {
       toast.error('Failed to load automations');
     } finally {

@@ -63,7 +63,7 @@ export default function CampaignCreate() {
   const fetchTemplates = async () => {
     try {
       const response = await templatesAPI.getAll();
-      setTemplates(response.data);
+      setTemplates(Array.isArray(response.data?.data) ? response.data.data : []);
     } catch (error) {
       console.error('Failed to load templates:', error);
     }
@@ -72,7 +72,7 @@ export default function CampaignCreate() {
   const fetchSegments = async () => {
     try {
       const response = await segmentsAPI.getAll();
-      setSegments(response.data);
+      setSegments(Array.isArray(response.data?.data) ? response.data.data : []);
     } catch (error) {
       console.error('Failed to load segments:', error);
     }

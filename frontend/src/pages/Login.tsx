@@ -4,11 +4,16 @@ import { SparklesIcon } from '@heroicons/react/24/outline';
 import toast from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
 
+const demoEnv = (import.meta as ImportMeta & { env: Record<string, string | undefined> }).env;
+const demoEmail = demoEnv.VITE_DEMO_EMAIL || '';
+const demoPassword = demoEnv.VITE_DEMO_PASSWORD || '';
+const demoConfigured = Boolean(demoEmail && demoPassword);
+
 export default function Login() {
   const navigate = useNavigate();
   const { login } = useAuth();
-  const [email, setEmail] = useState('demo@example.com');
-  const [password, setPassword] = useState('demo123');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -117,19 +122,15 @@ export default function Login() {
 
           <div className="mt-6 bg-blue-50 p-4 rounded-md">
             <p className="text-sm text-blue-800 mb-3">
-              <strong>Demo credentials:</strong><br />
-              Email: demo@example.com<br />
-              Password: demo123
+              {demoConfigured ? 'Use the configured demo account to explore the app.' : 'Demo credentials are not configured for this build.'}
             </p>
             <button
               type="button"
-              onClick={() => {
-                setEmail(import.meta.env.VITE_DEMO_EMAIL || '');
-                setPassword(import.meta.env.VITE_DEMO_PASSWORD || '');
-              }}
+              disabled={!demoConfigured || isLoading}
+              onClick={() => { setEmail(demoEmail); setPassword(demoPassword); }}
               className="w-full flex justify-center items-center px-4 py-2 bg-blue-600 text-white font-medium rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors"
             >
-              Auto Fill Demo Credentials
+              Fill demo credentials
             </button>
           </div>
         </div>

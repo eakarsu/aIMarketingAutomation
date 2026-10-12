@@ -1,3 +1,4 @@
+import AIReportLibrary from "./components/AIReportLibrary";
 import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from './context/AuthContext';
@@ -55,7 +56,7 @@ function PrivateRoute({ children }: { children: React.ReactNode }) {
 
 function App() {
   return (
-    <ErrorBoundary>
+    <><AIReportLibrary floating /><ErrorBoundary>
       <Routes>
         <Route path="/codex/custom-viz" element={<CodexCustomVizFeature />} />
         <Route path="/codex/operations" element={<CodexOperationsFeature />} />
@@ -112,7 +113,7 @@ function App() {
           }
         />
       </Routes>
-    </ErrorBoundary>
+    </ErrorBoundary></>
   );
 }
 

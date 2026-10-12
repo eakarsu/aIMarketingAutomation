@@ -61,7 +61,7 @@ export default function Contacts() {
 
       const response = await contactsAPI.getAll(params);
       // Backend returns { contacts: [...], pagination: {...} }
-      setContacts(response.data.contacts || response.data);
+      setContacts(Array.isArray(response.data?.contacts) ? response.data.contacts : []);
     } catch (error) {
       toast.error('Failed to load contacts');
     } finally {

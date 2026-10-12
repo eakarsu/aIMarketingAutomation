@@ -30,6 +30,7 @@ import {
 } from '@heroicons/react/24/outline';
 import { aiAPI, optionsAPI } from '../services/api';
 import toast from 'react-hot-toast';
+import AIReport from '../components/AIReport';
 
 // Sample data presets for each AI tool
 const SAMPLE_DATA: Record<string, { label: string; icon: string; data: Record<string, any> }[]> = {
@@ -71,7 +72,7 @@ const SAMPLE_DATA: Record<string, { label: string; icon: string; data: Record<st
   'campaign-suggester': [
     { label: 'Online Fitness', icon: '🏋️', data: { campaignBusiness: 'Online fitness coaching platform with personalized workout and meal plans', campaignIndustry: 'Health & Fitness', campaignGoals: 'Increase monthly subscriptions by 30% and reduce churn rate', campaignSeason: 'winter' } },
     { label: 'Coffee E-commerce', icon: '☕', data: { campaignBusiness: 'Premium specialty coffee subscription box delivered monthly from around the world', campaignIndustry: 'Food & Beverage E-commerce', campaignGoals: 'Grow subscriber base and increase average order value by 20%', campaignSeason: 'holiday' } },
-    { label: 'SaaS Startup', icon: '💻', data: { campaignBusiness: 'Project management SaaS tool for remote teams with AI task prioritization', campaignIndustry: 'Technology / SaaS', campaignGoals: 'Generate 500 new trial signups and improve trial-to-paid conversion', campaignSeason: '' } },
+    { label: 'SaaS Startup', icon: '💻', data: { campaignBusiness: 'Project management SaaS tool for remote teams with AI task prioritization', campaignIndustry: 'Technology / SaaS', campaignGoals: 'Generate 500 new trial signups and improve trial-to-paid conversion', campaignSeason: 'spring' } },
   ],
   'segment-builder': [
     { label: 'VIP Customers', icon: '👑', data: { segmentBuilderGoal: 'Identify VIP customers with highest lifetime value', segmentTargetAudience: 'Repeat purchasers who have spent over $500 and engaged with emails consistently', segmentBehaviors: 'Multiple purchases, high email open rates, clicked promotional links, left positive reviews' } },
@@ -535,7 +536,7 @@ function DetailModal({ isOpen, onClose, item, type, onDelete, onEdit }: DetailMo
           </div>
         );
       default:
-        return <pre className="text-xs bg-gray-50 p-4 rounded-lg overflow-auto">{JSON.stringify(item, null, 2)}</pre>;
+        return <AIReport response={item} title="Saved AI result" />;
     }
   };
 

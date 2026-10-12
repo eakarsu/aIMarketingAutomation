@@ -51,7 +51,7 @@ export default function Templates() {
       if (sortBy) params.sortBy = sortBy;
       if (sortOrder) params.sortOrder = sortOrder;
       const response = await templatesAPI.getAll(params);
-      setTemplates(response.data);
+      setTemplates(Array.isArray(response.data?.data) ? response.data.data : []);
     } catch (error) {
       toast.error('Failed to load templates');
     } finally {
